@@ -15,3 +15,9 @@ data/index/
 *.db
 .agents/
 .codex/
+# 用户提供的课程资料仅本地保存，不发布到代码仓库。
+docs/[[]01]*/
+data/course_content/
+data/course_facts.json
+data/course_catalog.json
+data/eval/pilot-results*.json

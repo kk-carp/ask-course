@@ -32,6 +32,7 @@ def sales_chat(monkeypatch):
     monkeypatch.setattr(db, "SessionLocal", factory)
     monkeypatch.setattr(db, "init_engine", lambda: engine)
     monkeypatch.setattr(settings, "chat_api_key", "")
+    monkeypatch.setattr("backend.services.course_facts.live_course", lambda cid: ({"id": int(cid), "price": 899, "original_price": "1299.00"}, "2026-09-30"))
     for module in (
         "backend.services.ask_orchestrator",
         "backend.services.consultation_service",
@@ -76,7 +77,8 @@ def test_recommend_first_then_answer_course_questions_and_switch_goal(sales_chat
     assert "MoveIt2" in detail["answer"]
     assert detail["related_courses"][0]["source_url"].endswith("/99")
     hardware = send(client, "没有真机能学吗？", cid)
-    assert "不能确认" in hardware["answer"]
+    assert "允许仿真练习" in hardware["answer"]
+    assert hardware["fact_sources"]
     assert hardware["owner"] is None
     changed = send(client, "还是想学大模型", cid)
     assert [item["id"] for item in changed["related_courses"]] == ["42"]
@@ -145,7 +147,7 @@ def test_recommend_list_binds_course_for_commercial_handoff(sales_chat, monkeypa
             session.get(VisitorConsultation, first["conversation_id"]).profile_json
         )
         assert profile["_selected_course_id"] == "42"
-    result = send(client, "有没有优惠？", first["conversation_id"])
+    result = send(client, "还能便宜一点吗？", first["conversation_id"])
     assert result["intent"] == "commercial"
     assert seen["course_id"] == "42"
 
@@ -180,13 +182,13 @@ def test_three_questions_answer_individually_and_save_one_turn(sales_chat, monke
     question = "这个课程价格多少？能看多久？有优惠吗？"
     result = send(client, question, first["conversation_id"])
     assert result["intent"] == "multi_question"
-    assert "599 元" in result["answer"]
-    assert "12 个月" in result["answer"]
+    assert "899 元" in result["answer"]
+    assert "期限资料存在冲突" in result["answer"]
     assert "课程顾问确认" in result["answer"]
-    assert seen == [("这个课程价格多少", "99"), ("能看多久", "99")]
-    assert result["owner"]["topic_key"] == "99"
-    assert result["prompt_tokens"] == 20
-    assert len(result["sources"]) == 1
+    assert seen == []
+    assert result["owner"] is None
+    assert result["prompt_tokens"] == 0
+    assert len(result["fact_sources"]) == 3
     with factory() as session:
         history = json.loads(session.get(VisitorConsultation, first["conversation_id"]).history_json)
         assert len(history) == 4
@@ -204,7 +206,7 @@ def test_mixed_public_answer_and_handoff_keeps_both(sales_chat, monkeypatch):
 
     monkeypatch.setattr("backend.services.intent_router.resolve_handoff", handoff)
     # 顾问问题在前；课程归属需要从整条消息取得，不能只看第一个子问题。
-    result = send(client, "有优惠吗？智能机械臂课程具体学什么？")
+    result = send(client, "还能便宜一点吗？智能机械臂课程具体学什么？")
     assert result["intent"] == "multi_question"
     assert "MoveIt2" in result["answer"]
     assert result["owner"]["topic_key"] == "99"
@@ -222,7 +224,7 @@ def test_multi_question_stream_uses_individual_answers(sales_chat, monkeypatch, 
         lambda **kwargs: type("H", (), {"owner": OwnerInfo(configured=False)})(),
     )
     response = client.post("/ask/stream", json={
-        "question": "这门课学什么？有优惠吗？", "course_id": "99", "channel": "internal_tool",
+        "question": "这门课学什么？还能便宜一点吗？", "course_id": "99", "channel": "internal_tool",
     })
     assert response.status_code == 200, response.text
     events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]
@@ -236,6 +238,7 @@ def test_multi_question_stream_uses_individual_answers(sales_chat, monkeypatch, 
 
 def test_missing_three_question_facts_are_not_invented(sales_chat, monkeypatch):
     client, _ = sales_chat
+    monkeypatch.setattr("backend.services.ask_orchestrator.answer_course_fact", lambda *_a: None)
     monkeypatch.setattr(
         "backend.services.ask_orchestrator.answer_question",
         lambda **kwargs: AskResult(answer="当前资料没有足够依据回答。", hit=False, sources=[]),
@@ -245,7 +248,7 @@ def test_missing_three_question_facts_are_not_invented(sales_chat, monkeypatch):
             f"backend.services.{module}.resolve_handoff",
             lambda **kwargs: type("H", (), {"owner": OwnerInfo(configured=False)})(),
         )
-    result = send(client, "价格多少？能看多久？有优惠吗？", course_id="99")
+    result = send(client, "价格多少？能看多久？还能便宜一点吗？", course_id="99")
     assert result["answer"].count("没有足够依据") == 2
     assert all(f"{index}." in result["answer"] for index in (1, 2, 3))
     assert result["hit"] is False
@@ -262,7 +265,7 @@ def test_one_upstream_failure_keeps_other_answers(sales_chat, monkeypatch):
         raise UpstreamServiceError("模型暂不可用")
 
     monkeypatch.setattr("backend.services.ask_orchestrator.answer_question", unavailable)
-    result = send(client, "价格多少？课程具体学什么？", course_id="99")
+    result = send(client, "讲师的研究方向是什么？课程具体学什么？", course_id="99")
     assert "这项查询暂时不可用" in result["answer"]
     assert "MoveIt2" in result["answer"]
     assert result["error_type"] == "upstream_error"

@@ -55,6 +55,7 @@ from backend.services.public_course_info import (
 )
 from backend.services.qa_service import AskResult, answer_question
 from backend.services.question_decomposition import split_questions
+from backend.services.course_facts import answer_course_fact
 
 _log = logging.getLogger("backend.ask_orchestrator")
 
@@ -417,6 +418,7 @@ def run_ask_turn(payload: AskRequest, identity: AskIdentity) -> AskResponse:
         llm_called=any(result.llm_called for result in responses),
         prompt_tokens=sum(result.prompt_tokens for result in responses),
         completion_tokens=sum(result.completion_tokens for result in responses),
+        fact_sources=[source for result in responses for source in result.fact_sources],
     )
     if identity.user_id is None and identity.visitor_id and conversation_id:
         _remember_guest_dialogue(
@@ -521,6 +523,17 @@ def _run_single_question(
         official = get_course_by_id(course_id)
 
     topic = public_fact_topic(payload.question)
+    fact = answer_course_fact(payload.question, course_id) if course_id else None
+    if fact is not None:
+        answer, evidence = fact
+        if dialogue_id and visitor_id and record_history:
+            _remember_guest_dialogue(visitor_id, dialogue_id, payload.question, answer)
+        return AskResponse(
+            answer=answer, hit=bool(evidence) and all(x["status"] not in {"unknown", "conflict"} for x in evidence),
+            fact_sources=evidence, conversation_id=UUID(dialogue_id) if dialogue_id else None,
+            related_courses=_enrich_related([related_course_card(official)]) if official else [],
+            intent="course_info",
+        )
     if official and topic:
         public_answer = answer_public_question(payload.question, official)
         answered = public_answer is not None

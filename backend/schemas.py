@@ -73,6 +73,7 @@ class AskResponse(BaseModel):
     llm_called: bool = False
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    fact_sources: list[dict[str, str]] = Field(default_factory=list)
 
 
 class ConversationItem(BaseModel):

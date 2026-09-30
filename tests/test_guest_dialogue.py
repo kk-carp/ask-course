@@ -34,6 +34,7 @@ def test_guest_profile_and_question_share_one_owned_conversation(monkeypatch):
         lambda *_args: ("43", []),
     )
     monkeypatch.setattr("backend.services.ask_orchestrator.public_fact_topic", lambda _q: None)
+    monkeypatch.setattr("backend.services.ask_orchestrator.answer_course_fact", lambda *_a: None)
     seen = {}
 
     def answer_question(**kwargs):
