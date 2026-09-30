@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>天树探界官网售前 Agent 助手 · 需求分析报告</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1c1f23; --ink2:#5b6470; --ink3:#8a919c;
+    --line:#e3e6ea; --line2:#d2d6dc;
+    --brand:#185FA5; --brand-bg:#E6F1FB;
+    --warn:#993C1D; --warn-bg:#FAECE7;
+    --ok:#0F6E56; --ok-bg:#E1F5EE;
+    --p0:#A32D2D; --p0-bg:#FCEBEB;
+    --p1:#854F0B; --p1-bg:#FAEEDA;
+    --p2:#444441; --p2-bg:#F1EFE8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:14px;line-height:1.7;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 28px 80px}
+  header{border-bottom:2px solid var(--ink);padding-bottom:20px;margin-bottom:36px}
+  h1{font-size:24px;font-weight:600;margin:0 0 10px;letter-spacing:-.2px}
+  .meta{font-size:12.5px;color:var(--ink3);display:flex;flex-wrap:wrap;gap:6px 20px}
+  .meta b{color:var(--ink2);font-weight:500}
+  h2{font-size:17px;font-weight:600;margin:44px 0 14px;padding-left:11px;border-left:3px solid var(--brand)}
+  h3{font-size:14.5px;font-weight:600;margin:26px 0 10px;color:var(--ink)}
+  p{margin:10px 0}
+  ul,ol{margin:10px 0;padding-left:22px}
+  li{margin:5px 0}
+  code{background:#eef1f4;padding:1px 5px;border-radius:4px;font-size:12.5px;
+    font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#2b3138}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px;background:var(--card);
+    border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  th{background:#f0f2f5;text-align:left;padding:9px 12px;font-weight:600;font-size:12.5px;
+    color:var(--ink2);border-bottom:1px solid var(--line2);white-space:nowrap}
+  td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:16px 0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:16px 0}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .kpi .lbl{font-size:12px;color:var(--ink3);margin-bottom:5px}
+  .kpi .val{font-size:19px;font-weight:600;letter-spacing:-.3px}
+  .kpi .sub{font-size:12px;color:var(--ink2);margin-top:3px}
+  .tag{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:20px;font-weight:500;white-space:nowrap}
+  .t-p0{background:var(--p0-bg);color:var(--p0)}
+  .t-p1{background:var(--p1-bg);color:var(--p1)}
+  .t-p2{background:var(--p2-bg);color:var(--p2)}
+  .t-ok{background:var(--ok-bg);color:var(--ok)}
+  .t-warn{background:var(--warn-bg);color:var(--warn)}
+  .t-brand{background:var(--brand-bg);color:var(--brand)}
+  .callout{border-left:3px solid var(--warn);background:var(--warn-bg);padding:14px 18px;border-radius:0 8px 8px 0;margin:16px 0}
+  .callout.ok{border-left-color:var(--ok);background:var(--ok-bg)}
+  .callout.brand{border-left-color:var(--brand);background:var(--brand-bg)}
+  .callout .ct{font-weight:600;font-size:13px;margin-bottom:4px}
+  .ears{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--brand);
+    border-radius:0 8px 8px 0;padding:13px 17px;margin:11px 0}
+  .ears .k{font-size:11.5px;font-weight:600;color:var(--brand);letter-spacing:.4px;text-transform:uppercase}
+  .ears .v{font-size:13.5px;margin-top:4px}
+  .ears .v em{font-style:normal;background:#fff6d6;padding:0 2px;border-radius:2px}
+  .flow{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px;margin:16px 0}
+  .step{display:flex;align-items:flex-start;gap:12px;padding:9px 0}
+  .step .n{flex:0 0 24px;height:24px;border-radius:50%;background:#eceff3;color:var(--ink2);
+    font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center}
+  .step.bad .n{background:var(--p0-bg);color:var(--p0)}
+  .step.bad .st{color:var(--p0);font-weight:600}
+  .step .st{font-weight:500;font-size:13.5px}
+  .step .sd{font-size:12.5px;color:var(--ink2)}
+  footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);
+    font-size:12px;color:var(--ink3)}
+  @media print{body{background:#fff}.wrap{padding:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>天树探界官网售前 Agent 助手 · 需求分析报告</h1>
+  <div class="meta">
+    <span><b>日期</b> 2026-09-16</span>
+    <span><b>所属阶段</b> 需求规划</span>
+    <span><b>对象站点</b> www.arborseek.com</span>
+  </div>
+</header>
+
+<h2>0. 结论摘要</h2>
+<div class="grid">
+  <div class="kpi"><div class="lbl">课程商品价格带</div><div class="val">¥4.9 – ¥1600</div><div class="sub">天然适合阶梯式升单</div></div>
+  <div class="kpi"><div class="lbl">课程详情页结构</div><div class="val">9 个标准板块</div><div class="sub">板块正文含图片 · 需文本化</div></div>
+  <div class="kpi"><div class="lbl">支付链路</div><div class="val">已有 · 需登录</div><div class="sub">登录是主要转化摩擦点</div></div>
+  <div class="kpi"><div class="lbl">成交主渠道</div><div class="val">微信 1v1</div><div class="sub">官网只承担最终下单</div></div>
+  <div class="kpi"><div class="lbl">官网现有承接</div><div class="val">企微扫码加好友</div><div class="sub">按课程路由 · 已升级企业微信</div></div>
+  <div class="kpi"><div class="lbl">售前二维码获取</div><div class="val">接口字段直读</div><div class="sub">接口字段 pre_sale_service_qrcode</div></div>
+  <div class="kpi"><div class="lbl">人机分工</div><div class="val">协同 C + 增强 B</div><div class="sub">已拍板 · 机器初筛 + 人工成交</div></div>
+</div>
+<p>综合判断如下十点：</p>
+<ol>
+  <li><b>官网不是售前主战场，微信才是。</b>当前真实的成交路径是「售前人员在微信上与学员一对一沟通 → 引导学员到官网完成支付」。官网在整个链路中承担的是<b>收银台</b>角色，而不是咨询与决策场所。<b>这决定了本方案的首要命题不是"填补官网空白"，而是"与人工售前如何分工"。</b></li>
+  <li><b>班主任企业微信是售后入口，不是售前入口。</b>经确认，班主任企微在<b>学员付费之后</b>才可见，属于班级服务与学习管理通道。</li>
+  <li><b>官网并非没有承接点，而是承接点"太重"。</b>官网上设有<b>咨询按钮，点击后弹出售前人员微信二维码</b>，且<b>不同课程弹出的是不同售前人员的微信</b>。承接是存在的，但完整动作是"主动点击 → 扫码 → 跳出官网 → 加好友 → 等人工回复"，共五个环节。它能否生效，取决于用户<b>愿不愿意扫</b>以及售前<b>在不在线</b>。<b>该二维码已升级为企业微信</b>——通道<b>具备可统计、可编程（活码与开放接口）的能力基础</b>，线索归因与上下文传递因此可实现（见第 1 节、3.1 与第 12 节）。</li>
+  <li><b>"按课程路由到售前"这件事，官网已经在做了。</b>既然不同课程对应不同售前微信，说明<b>课程—售前映射关系已经存在</b>，售前团队本身也是按课程线分工的。这对方案是重大利好：R6（按意向课程转人工）<b>从"需要新建分配机制"降级为"读取并复用现有映射"</b>。<b>但它也意味着 Agent 推荐哪门课、线索就流向哪位售前，推荐逻辑在客观上具有分配作用。</b>归属规则确认为"<b>归属最近一次人工接触的售前</b>"，带来一个关键效果：<b>已被售前接触过的学员，其业绩不因 Agent 介入而转移</b>——售前的存量利益被保护，内部抵触动机因此显著下降；剩余关注点收敛为"增量自然流量线索的分配"与"各课程线承接能力"（见 2.5）。</li>
+  <li><b>因此 Agent 的位置很清楚：把"扫码"从第一步变成最后一步。</b>先在官网内部用 Agent 完成常规答疑与选课推荐，只把价格让利、B2B 采购、复杂个案交给扫码转人工。<b>不是替代人工，而是把人工的产能留给最值得人工介入的对话。</b></li>
+  <li><b>售前人员的微信对话记录是知识库的最佳素材。</b>学员在微信里问过什么、卡在哪一步、什么话术能促成转化——这些真实语料比从零设计问诊脚本准确得多。<b>这是本期成本最低、收益最高的准备动作</b>，建议列为 MVP 前置任务。</li>
+  <li><b>六项正面发现降低了实现成本：</b>课程详情页已有 9 个标准板块可直接作为推荐匹配字段（见 1.1）；官网已有的<b>二维码弹窗本身就是现成的转人工出口</b>，Agent 可直接复用（见 3.1）；<b>课程—售前映射关系已经存在</b>，按课程路由不需要重新设计分配机制（见 3.1）；<b>售前承接渠道已升级为企业微信</b>，为线索归因与上下文传递补上了可编程基础；公司另有一套<b>已落地的同类系统</b>（FDE「统一知识助手」），其 RAG 内核、「未命中 → 转人工」链路、负责人映射表、旁路推荐 Agent 编排与评测闭环均可直接复用（见 3.2）；<b>课程详情接口经实测返回完整结构化字段，且售前二维码即为现成的接口字段</b>（见 3.4）。</li>
+  <li><b>接入官网不依赖前端源码，需要的是"三处授权"。</b>即使目前没有官网代码，Agent 也可以通过<b>在部署层注入脚本</b>的方式挂载上线——这正是第三方客服系统的标准做法，它对官网的要求只是"在 HTML 中多一行 script"。真正需要拿到的不是整套源码，而是：<b>部署层的一处注入权限、现有"咨询"弹窗的组件位置、以及课程—售前映射的读取方式</b>。更重要的是，<b>在这些授权到位之前，Agent 完全可以先独立部署、先服务售前内部</b>，不受任何阻塞（见 3.3）。<b>现官网维护方已确认为内部技术团队</b>：三处授权可直接与内部团队沟通、不跨组织；且内部团队具备改源码能力，P2（单点组件替换）与 P3（完整集成）也更具可行性，入口归一（R22）可借源码改造更干净地实现。</li>
+  <li><b>三项组织规则已落地，这是立项阶段最重要的进展。</b>① <b>人机分工</b>确定为<b>协同（C）+ 增强（B）</b>——官网侧 Agent 承接初步问诊并把高意向线索按课程交付给对应售前，内部侧为售前提供推荐与话术辅助；② <b>业绩归属</b>确定为<b>归属最近一次人工接触的售前</b>，售前存量利益受保护；③ <b>推荐权重暂不设评审机制</b>。三条落地后，方案最大的不确定性由"组织能否接受"转为"能否按期实现"，项目可以从需求分析进入 PRD 撰写（见 2.5）。</li>
+  <li><b>课程详情接口已实测，两项关键未知同时关闭，但暴露出一项内容风险。</b>接口返回结构化的课程 JSON，且<b>直接携带 <code>pre_sale_service_qrcode</code>（售前服务二维码）字段</b>——"课程 → 售前"的映射无需另寻数据源，按课程 ID 调用详情接口即可取得，<b>R24 的实现方式确定为字段直读</b>。推荐所需的字段（价格、原价、标签、分类、<b>难度分级 <code>difficulty_level</code></b>、卖点、报名状态）也<b>比预期更完整</b>。<b>但需正视一项新风险：课程正文 <code>full_description</code> / <code>h5_description</code> 全部由图片构成</b>，接口层没有可检索文本——而"这门课讲什么"正是学员最高频的提问，知识库必须另行文本化（见 3.4）。</li>
+</ol>
+
+<h2>1. 业务方确认信息与影响</h2>
+<p>以下事项为业务方已确认结论，本报告其余章节均以此为前提。</p>
+<table>
+  <thead><tr><th>事项</th><th>确认结论</th><th>对方案的影响</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>在线支付</td>
+      <td>课程支持在线支付，需先登录再支付</td>
+      <td>成交闭环已存在，Agent 无需自建交易；但需处理<b>登录中断</b>——未登录状态下发起购买必须保留会话与推荐记录，登录后回到原流程</td>
+    </tr>
+    <tr>
+      <td>课程介绍结构</td>
+      <td>每门课详情页有 9 个标准板块（见 1.1）</td>
+      <td><b>重要的正面发现。</b>知识库可按此结构组织，推荐引擎可直接取用"适用人群"等字段，无需额外补录商品结构化数据</td>
+    </tr>
+    <tr>
+      <td>班主任企业微信</td>
+      <td>学员<b>付费之后</b>才能看到班主任企业微信</td>
+      <td>班主任企微属于<b>售后服务</b>通道（班级服务、答疑、开课通知），<b>不承担售前承接</b>。Agent 的转人工目标不应指向班主任</td>
+    </tr>
+    <tr>
+      <td>现有售前模式</td>
+      <td>已有售前人员做宣传，<b>在微信上与学员一对一接触</b>，沟通后再引导学员到官网购买</td>
+      <td><b>关键信息。</b>官网实为"收银台"，决策与信任建立发生在微信。Agent 的定位必须与人工售前明确分工，否则将引发内部抵触与业绩归属争议（见 2.5）</td>
+    </tr>
+    <tr>
+      <td>官网现有咨询入口</td>
+      <td>官网上有<b>咨询按钮，点击弹出销售 / 售前人员微信二维码</b></td>
+      <td>官网付费前<b>存在承接点</b>，但形态是"扫码加微信"，需跳出官网且依赖人工在线。<b>工程含义：转人工的弹窗组件已经存在，Agent 可直接复用</b>（见 3.1）</td>
+    </tr>
+    <tr>
+      <td>二维码按课程区分</td>
+      <td><b>不同课程弹出的售前微信不同</b>（课程—售前映射已存在）</td>
+      <td><b>关键判断。</b>其一，按课程路由不需要新建分配机制，读取现有映射即可，<b>R6 复杂度为低</b>；其二，说明售前团队按课程线分工，线索天然按课程隔离；其三，<b>Agent 的推荐结果将直接决定线索流向哪位售前，推荐逻辑在客观上具有分配作用</b>。<b>该风险因归属规则确认为"归属最近一次人工接触的售前"而显著下降</b>——已被售前接触的学员其业绩不受 Agent 影响，剩余关切收敛为增量自然流量线索的分配（见 2.5）</td>
+    </tr>
+    <tr>
+      <td>售前承接渠道形态</td>
+      <td>售前承接渠道为<b>企业微信</b></td>
+      <td><b>通道具备可统计、可编程的能力基础。</b>① <b>可统计</b>：企业微信支持带参数的「联系我」码，可分渠道追踪扫码与添加，<b>R19 线索归因可实现自动归因</b>；② <b>可编程</b>：企业微信提供客户联系与消息推送开放接口，<b>R23 上下文传递可实现程序化推送</b>；③ <b>资产与风控</b>：好友上限与风控约束优于个人号，客户资产可在企业侧继承。<b>前提是活码与接口已实际启用——若仅完成账号迁移，R19 / R23 需按降级方案实现</b>（见第 12 节）</td>
+    </tr>
+    <tr>
+      <td>课程详情接口</td>
+      <td>返回结构化课程 JSON；<b>其中直接包含 <code>pre_sale_service_qrcode</code>（售前服务二维码）字段</b>；课程正文为图片富文本</td>
+      <td><b>两项关键未知同时明确：</b>① 课程数据可程序化获取，推荐字段比预期完整（含难度分级）；② <b>"课程 → 售前"映射无需另找数据源，接口字段直读即可</b>（R24 据此定案）。<b>同时新增一项内容风险：</b>正文与多板块内容为图片，知识库需文本化（详见 3.4）</td>
+    </tr>
+    <tr>
+      <td>基线数据</td>
+      <td>官网当前暂无基线数据</td>
+      <td>无法在立项阶段设定量化目标；指标策略改为"先建埋点基线，再定目标"两阶段推进，且基线需按流量来源分层</td>
+    </tr>
+    <tr>
+      <td>推荐范围</td>
+      <td>暂时只推荐天树探界自有课程</td>
+      <td>原集团级跨品牌推荐需求移出本期；赛氪数据用途收窄为人群定向与冷启动信号</td>
+    </tr>
+    <tr>
+      <td>人机分工定位</td>
+      <td><b>协同（C）+ 增强（B）</b></td>
+      <td><b>立项阶段最关键的一条定位。</b>官网侧 Agent 承接初步问诊、把高意向线索按课程交付给对应售前；内部侧为售前提供推荐结果与标准话术。这意味着 Agent 的定位是<b>人工售前的同伴而非替代者</b>，功能清单、工作量与内部推广方式均据此确定（见 2.5）</td>
+    </tr>
+    <tr>
+      <td>业绩归属规则</td>
+      <td>Agent 促成或辅助的订单，<b>归属最近一次人工接触的售前</b></td>
+      <td><b>售前存量利益受保护，内部阻力随之下降。</b>已被售前接触过的学员回官网成交，业绩仍归该售前，Agent 不参与分成、仅计入工具效能指标。<b>技术含义：必须准确记录"最近一次人工接触的售前"及其时间与渠道——该记录是归属规则的必要前提</b>（R19 / R27）。尚待明确的是判定口径（时间窗、跨渠道范围、纯自然流量成交归属）</td>
+    </tr>
+    <tr>
+      <td>推荐权重评审</td>
+      <td><b>暂时不需要设置评审机制</b></td>
+      <td>推荐权重<b>无需销售侧评审机制</b>，因此不设评审流程与例会。<b>R25 定位为"推荐依据轻量留痕"（P2）</b>；保留"每月同步课程线线索分布"作为运营透明度措施</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>1.1 课程详情页 9 大板块的再利用价值</h3>
+<p>这一结构对 Agent 的价值远超"页面导航"，它实质上是一门课的完整信息骨架：</p>
+<table>
+  <thead><tr><th>板块</th><th>Agent 用途</th></tr></thead>
+  <tbody>
+    <tr><td>1 课程模块</td><td>回答"这门课讲什么"，是生成推荐理由的主体素材</td></tr>
+    <tr><td>2 学习安排</td><td>对应画像中的<b>时间投入</b>维度，判断课程强度是否匹配</td></tr>
+    <tr><td>3 讲师团队</td><td>建立信任，回答"谁来讲"；高客单课程的信任关键</td></tr>
+    <tr><td>4 授课形式</td><td>回答"线上还是线下、直播还是录播、能否回放"</td></tr>
+    <tr><td>5 课程目录</td><td>用于判断<b>难度起点</b>与前置知识要求，是硬匹配过滤的依据</td></tr>
+    <tr><td>6 结业证书</td><td>对应画像中的<b>证书诉求</b>维度</td></tr>
+    <tr><td>7 适用人群 <span class="tag t-brand">核心</span></td><td><b>推荐引擎的核心匹配字段</b>，可直接映射为规则条件</td></tr>
+    <tr><td>8 往期回顾</td><td>社会证明素材，用于打消"学了有没有用"的疑虑</td></tr>
+    <tr><td>9 常见问题</td><td>可直接抽取为高频问答知识库，是冷启动最快的内容来源</td></tr>
+  </tbody>
+</table>
+<div class="callout ok">
+  <div class="ct">推荐所需的机器可读字段齐备，但内容形态需注意</div>
+  接口实测确认：课程接口返回结构化字段（价格、标签、难度、分类、卖点、报名状态等，详见 3.4），推荐引擎可用的字段<b>比预期更完整</b>（含 <code>difficulty_level</code> 难度分级），<b>无需为推荐引擎额外补录商品结构化数据</b>。<b>但需注意两点：</b>① 上述 9 个板块中的多数（课程正文、适用人群、结业证书、常见问题等）<b>并未以结构化字段出现在接口中</b>；② 详情正文 <code>full_description</code> / <code>h5_description</code> <b>全部由图片构成</b>，无可检索文本——知识库需要另做文本化处理（详见 3.4）。
+</div>
+
+<h2>2. 官网现状盘点</h2>
+
+<h3>2.1 业务与品牌定位</h3>
+<p>天树探界（杭州天树探界机器人科技有限公司）系环球赛乐集团旗下专注机器人算法研发的创新科技企业，定位"算法赋能机器人，智能触达新场景"，办公地址位于北京市石景山区人工智能大模型集聚区。业务呈现"产品 + 教育"双主线：</p>
+<ul>
+  <li><b>机器人产品线：</b>天树探界遥控、大模型平台、智能导览、智能巡检。核心技术为多传感融合感知、具身大模型决策、场景化交互适配。</li>
+  <li><b>产教融合线：</b>U19 青少年与高校人才培养、大学生机器人与算法竞赛、高校课程体系建设、K12 机器人教育、人工智能研学营、人工智能组织认证。</li>
+  <li><b>硬件生态：</b>宇树科技、众擎机器人、银河通用、加速进化、智元机器人、松灵机器人、逐际动力、灵心巧手、科大讯飞、腾讯云。使"按硬件条件推荐课程"成为可能。</li>
+</ul>
+
+<h3>2.2 课程商品结构</h3>
+<table>
+  <thead><tr><th>价格带</th><th>课程示例</th><th>定位</th><th>转化作用</th></tr></thead>
+  <tbody>
+    <tr><td>免费</td><td>OpenClaw 开源 AI 智能体实战指南</td><td>获客内容</td><td>拉新、建立信任</td></tr>
+    <tr><td>¥4.9 – ¥9.9</td><td>AI 大模型企业实战训练营（体验课）、四足机器人无人巡检实训营（体验课）、Git、Docker、ROS</td><td>体验钩子</td><td>极低门槛首单，筛意向</td></tr>
+    <tr><td>¥19.9 – ¥69</td><td>手把手学 Ubuntu、ROS2 机器人系统、具身智能基础、WorkBuddy AI 助手实战</td><td>入门正价课</td><td>建立付费习惯</td></tr>
+    <tr><td>¥399 – ¥699</td><td>机器人仿真抓取、运动控制避障绕桩、机器学习与运筹优化、工业级多模态 Agent 与 VLA</td><td>专业进阶</td><td>主力营收</td></tr>
+    <tr><td>¥599</td><td>AI 大模型企业实战训练营、四足机器人无人巡检实训营</td><td>实训营</td><td>高客单转化</td></tr>
+    <tr><td>¥1600</td><td>大模型工作坊实战课程</td><td>高阶 / 线下</td><td>利润款</td></tr>
+  </tbody>
+</table>
+<div class="callout brand">
+  <div class="ct">关键观察</div>
+  课程价格带呈漏斗型结构，跨度超过 300 倍，且存在"体验课—正价课"同名产品对（如"四足机器人无人巡检实训营"同时提供 ¥5.9 体验课与 ¥599 正价课）。<b>这套商品设计本身就是为"先低价试、再升单"准备的，但目前没有任何机制推动用户走完这一步。</b>由于支付环节已经具备，流失集中发生在决策环节而非交易环节。
+</div>
+
+<h3>2.3 流量与用户来源</h3>
+<ul>
+  <li><b>人工售前触达（当前主力）：</b>售前人员通过微信与学员一对一接触，完成课程介绍与答疑后引导至官网下单。这是目前<b>实际产生成交的主渠道</b>，也是理解本项目的起点。</li>
+  <li><b>集团内部流量：</b>母公司环球赛乐（2014 年成立，国家高新技术企业）旗下赛氪为国内领先赛事活动平台，1000 万+ 用户流量、覆盖全国 90% 参赛高校、50 万+ 高活跃竞赛交流群。</li>
+  <li><b>自有媒体矩阵：</b>微信公众号、视频号、知乎、B 站、小红书、抖音六渠道，官网均以二维码引导关注。公开课页面显示单课学习人次在 200–1000+ 量级。</li>
+  <li><b>核心用户画像：</b>以高校大学生为主，其次为高校教师、科研工作者、行业集成商；K12 侧由研学营与机器人教育覆盖。</li>
+</ul>
+
+<h3>2.4 转化链路现状</h3>
+<p>经确认，官网并非售前的第一现场，但官网上确实设有承接入口。完整链路如下：</p>
+<div class="flow">
+  <div class="step"><div class="n">1</div><div><div class="st">流量进入</div><div class="sd">赛氪生态 / 六大社媒矩阵 / 自然搜索 / 线下宣讲</div></div></div>
+  <div class="step"><div class="n">2</div><div><div class="st">人工售前接触</div><div class="sd">售前人员在<b>微信</b>上与学员一对一沟通：介绍课程、解答疑问、建立信任</div></div></div>
+  <div class="step"><div class="n">3</div><div><div class="st">引导至官网</div><div class="sd">学员被引导到 www.arborseek.com 浏览课程、比价、确认</div></div></div>
+  <div class="step"><div class="n">4</div><div><div class="st">官网现有承接入口</div><div class="sd">点击"咨询"按钮 → 弹出<b>该课程对应售前人员</b>的<b>企业微信</b>二维码 → 扫码加好友。<b>承接点存在、已按课程区分、且渠道已升级企业微信，但需主动点击、需跳出官网、需等人工在线</b></div></div></div>
+  <div class="step bad"><div class="n">!</div><div><div class="st">高成本漏斗</div><div class="sd">不愿扫码、未点击咨询、非工作时段到访的用户，在付费前得不到任何选课辅助，只能对着课程列表自行判断</div></div></div>
+  <div class="step"><div class="n">5</div><div><div class="st">登录 + 在线支付</div><div class="sd">强制登录前置，存在会话与推荐上下文丢失风险；成交在此完成</div></div></div>
+  <div class="step"><div class="n">6</div><div><div class="st">售后承接</div><div class="sd"><b>付费后</b>可见班主任企业微信，进入班级服务与学习管理</div></div></div>
+</div>
+<p>修订后的判断分三层：</p>
+<ol>
+  <li><b>对"被售前带过来的学员"，链路是通的</b>——决策已在微信完成，官网只需完成登录与支付，Agent 在此处的价值是降低临门一脚的摩擦。</li>
+  <li><b>对"自己找到官网的学员"，链路不是断的，但很窄。</b>要走到人工面前，必须先主动点击"咨询"、愿意扫码、愿意离开官网到微信里再聊、还要碰上售前在线。<b>每一个环节都是一次筛选，绝大多数自然流量走不完这四步。</b></li>
+  <li><b>Agent 的介入位置因此非常明确：把"扫码"从第一步变成最后一步。</b>先由 Agent 在官网内部承接常规问题（课程内容、难度、基础要求、证书、价格区间、如何选），只有在用户明确要求找人或遇到敏感问题时，才弹出二维码。<b>由于现有弹窗已按课程区分售前，"弹对了码"本身就是一次有效的线索分流</b>——Agent 只需按推荐结果取对应售前即可。这既不削弱人工，反而提高了交给人工的对话质量，也让线索落到了对的人手上。</li>
+</ol>
+
+<h3>2.5 关键定位决策：Agent 与人工售前的三种分工关系</h3>
+<p>这是本方案<b>最需要优先拍板</b>的问题，它决定产品形态、工作量与内部推广阻力，优先级高于任何功能清单。</p>
+<table>
+  <thead><tr><th>路线</th><th>形态</th><th>优势</th><th>风险</th><th>建议</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>A. 替代</b></td>
+      <td>官网自助售前机器人，直接面向学员</td>
+      <td>覆盖自然流量与非工作时段；边际成本低</td>
+      <td>易被售前团队视为"抢单"；缺少人际信任，高客单课程说服力弱</td>
+      <td><span class="tag t-p1">部分采纳</span></td>
+    </tr>
+    <tr>
+      <td><b>B. 增强</b></td>
+      <td>售前人员内部助手：在微信对话过程中实时给出推荐结果与标准话术</td>
+      <td>不触碰业绩归属；直接提升售前效率；可沉淀真实对话数据用于迭代</td>
+      <td>需另做内部端；使用意愿依赖运营推动与考核配套</td>
+      <td><span class="tag t-ok">已确认 · 与 C 并行</span></td>
+    </tr>
+    <tr>
+      <td><b>C. 协同</b></td>
+      <td>官网 Agent 承接初步问诊，识别高意向后按课程交付给对应售前人员</td>
+      <td>同时覆盖自然流量与售前引流；形成"机器初筛 + 人工成交"的分工；<b>复用现有二维码弹窗与课程—售前映射即可落地</b></td>
+      <td>需与售前约定响应时效与超时兜底；<b>课程路由已存在，但 Agent 的推荐偏向会直接改变售前的线索份额</b></td>
+      <td><span class="tag t-brand">已确认 · 核心形态</span></td>
+    </tr>
+  </tbody>
+</table>
+<div class="callout ok">
+  <div class="ct">方案 C 的实现成本比预想低，且通道已具备可编程基础</div>
+  既然官网已有"点击咨询 → 弹出销售微信二维码"的能力，<b>Agent 的转人工动作就不需要新建任何通道</b>——复用同一个弹窗即可。而且由于<b>不同课程对应不同售前微信</b>，"按意向课程路由到对应售前"这一能力<b>也已经天然具备</b>，无需设计分配算法。<b>承接渠道已升级为企业微信</b>，因此"弹之前先把画像与咨询摘要递过去"具备程序化推送的接口基础（前提是企微「联系我」活码与开放接口已启用）。需要新增的收敛为两件事：<b>"判断何时弹"的规则</b>，以及<b>与企微接口的对接实现</b>。
+</div>
+<div class="callout">
+  <div class="ct">线索分配公平性：风险因归属规则与推荐权重口径落地而显著下降</div>
+  <b>线索按课程分流到不同售前，因此"Agent 推荐了哪门课"在客观上等同于"把线索给了哪位售前"。</b>两项已落地的规则使风险等级整体下调：<br>
+  ① <b>归属规则为"最近一次人工接触的售前"</b>——售前已接触过的学员，其业绩不会因 Agent 介入而转移，"被抢单"情形被规则排除，抵触动机显著下降；<br>
+  ② <b>推荐权重无需销售侧评审</b>——不设评审流程与例会机制，落地路径更短。<br>
+  <b>剩余关切收敛为两点：</b>一是<b>增量自然流量线索</b>在各课程线间的分配（这是归属规则覆盖不到的部分）；二是<b>各课程线承接能力不均</b>——若某课程线承接力不足，Agent 越努力推荐、线索浪费越严重。<br>
+  <b>应对措施：</b>保留推荐依据轻量留痕（R25），供事后向售前说明"为什么推这门课"；每月向销售侧同步课程线线索分布作为<b>运营透明度措施</b>（非评审）；按课程线设线索量上限，超出后转兜底分配或降级呈现。
+</div>
+<div class="callout ok">
+  <div class="ct">已对齐的组织规则：业绩归属以"最近一次人工接触的售前"为准</div>
+  <b>规则本身：</b>Agent 促成或辅助的订单，归属最近一次人工接触过该学员的售前人员；Agent 不参与业绩分成，仅计入工具效能指标。<br>
+  <b>这条规则为什么有效：</b>它把"存量学员"的业绩锁定给已接触的售前，<b>Agent 的推荐结果无法改变既有学员的归属</b>。这直接消解了售前最核心的顾虑（怕被机器抢单），也是内部阻力量级下降的根本原因。<br>
+  <b>技术含义（重要）：</b>规则要能执行，前提是系统能准确回答"该学员最近一次被哪位售前接触过、在什么时间、通过什么渠道"。因此"最近一次人工接触人"的记录是<b>归属规则的必要前提</b>——须由 Agent 侧与售前侧共同补全（R19 / R27）。<br>
+  <b>仍待补齐的口径：</b>① 时间窗——多久内的接触算"最近"？② 跨渠道——售前在微信接触、学员从其他渠道进入官网，是否同样判定？③ <b>纯自然流量成交（无任何人工接触记录）归谁</b>——这是规则的空缺处，需销售负责人补口径。口径未定前，R19 / R27 无法写验收标准。
+</div>
+
+<h2>3. 技术底座盘点</h2>
+<table>
+  <thead><tr><th>能力项</th><th>现状</th><th>对 Agent 的意义</th></tr></thead>
+  <tbody>
+    <tr><td>前端形态</td><td>Vue 3 + Ant Design Vue 单页应用，路由含 <code>/course/:courseId</code>、<code>/course-html/:id</code>、<code>/login</code></td><td>悬浮球组件可以路由级插件形式嵌入；<b>SPA 特性有利于保持会话状态</b>，登录返回后可恢复上下文</td></tr>
+    <tr><td>业务后台 API</td><td><code>https://arboradmin.saikr.com</code>（与赛氪共用后台域）</td><td>课程、订单、用户数据已有接口层，Agent 可服务端调用获取真实商品数据</td></tr>
+    <tr><td>LLM 网关</td><td><code>https://openai.arborseek.com/v1/chat/completions</code>，OpenAI 兼容协议</td><td><b>已具备对话能力底座</b>，无需重新选型或采购</td></tr>
+    <tr><td>AI 管理能力</td><td>后台已有 <code>/admin/ai/providers</code> 路由</td><td>已有多供应商管理与切换能力，Agent 可纳入既有 AI 治理体系</td></tr>
+    <tr><td>AI 会话结构</td><td>前端产物含 <code>aiThreadToApiMessages</code> 消息转换模块</td><td>已有会话消息模型，可复用而非重造</td></tr>
+    <tr><td>支付与登录</td><td>支持在线支付，强制登录前置</td><td><b>关键约束项</b>：Agent 需在对话内提前引导登录，并在登录跳转前后保持会话与推荐记录</td></tr>
+    <tr><td>课程详情接口 <span class="tag t-ok">已实测</span></td><td>返回结构化课程 JSON，含价格、原价、标签、分类、<b><code>difficulty_level</code> 难度分级</b>、卖点、报名状态，以及 <b><code>pre_sale_service_qrcode</code> 售前二维码</b>；正文为图片富文本</td><td><b>推荐字段与售前路由均已具备</b>（详见 3.4）。<b>唯一需补的是正文文本化</b>——接口层没有课程内容文本</td></tr>
+    <tr><td><b>现有咨询入口</b></td><td>咨询按钮 + <b>售前人员微信二维码弹窗</b>，<b>且已按课程分码、已升级为企业微信</b></td><td><b>现成的转人工出口。</b>Agent 无需新建 IM 或客服系统，直接复用该弹窗；按课程分码已确认（课程—售前映射已存在），渠道升级企业微信后具备活码参数与接口能力。需新增的只有"何时弹"的规则与企微接口对接</td></tr>
+    <tr><td>线索承接</td><td>付费前由<b>售前人员</b>在微信侧承接；班主任企微<b>付费后</b>才对学员可见</td><td>Agent 的转人工目标应指向<b>售前人员</b>而非班主任</td></tr>
+    <tr><td>学习系统</td><td>LMS 路由 <code>/arborseek-lms</code>，含课程任务页 <code>/course/:courseId/task/:taskId/show</code></td><td>可打通"报名—开课—学习"链路，支撑学习提醒与完课引导</td></tr>
+    <tr><td>视频与版权</td><td>腾讯云 VOD 点播 + DRM 加密（TcPlayer + DRM license 服务）</td><td><b>硬约束</b>：付费内容有严格版权保护，Agent 不得输出或泄露课程视频内容</td></tr>
+    <tr><td>其他能力</td><td>直播 <code>/live/:channelId</code>、问卷 <code>/survey/:code</code></td><td>可支撑直播预约、课后调研等延展场景</td></tr>
+  </tbody>
+</table>
+
+<h3>3.1 可复用资产小结</h3>
+<p>Agent 所需的能力中，绝大部分已经现成可用：</p>
+<table>
+  <thead><tr><th>Agent 需要的能力</th><th>是否已有</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td>对话能力（LLM）</td><td><span class="tag t-ok">已有</span></td><td>OpenAI 兼容网关 + 后台供应商管理</td></tr>
+    <tr><td>推荐所需商品信息</td><td><span class="tag t-ok">已有</span></td><td>课程接口返回价格、原价、标签、分类、<b>难度分级（<code>difficulty_level</code>）</b>、卖点、报名状态等结构化字段（详见 3.4）。<b>但课程正文与 9 板块多为图片，文本内容需另做文本化</b></td></tr>
+    <tr><td>转人工通道</td><td><span class="tag t-ok">已有</span></td><td>咨询按钮 + 售前微信二维码弹窗，<b>且已升级为企业微信</b>。弹窗组件可直接复用；企业微信另提供带参数的「联系我」码与开放接口，为线索归因（R19）与上下文传递（R23）提供了实现基础——<b>前提是企微「联系我」活码与开放接口已启用</b>（见第 12 节）</td></tr>
+    <tr><td>按课程路由到售前</td><td><span class="tag t-ok">已有</span></td><td><b>不同课程已对应不同售前微信，映射关系存在</b>，无需自建分配机制</td></tr>
+    <tr><td>课程 → 售前映射</td><td><span class="tag t-ok">已有</span></td><td><b>课程详情接口直接返回 <code>pre_sale_service_qrcode</code></b>，无需另寻映射数据源。尚需确认：该字段是否按课程独立配置、能否在后台维护（见第 12 节）</td></tr>
+    <tr><td>线索接收与响应时效</td><td><span class="tag t-p1">待明确</span></td><td>扫码后多久响应、非工作时段如何处理、单课程线承接量上限</td></tr>
+    <tr><td>官网前端接入</td><td><span class="tag t-warn">无需源码</span></td><td>即使没有官网源码，也可通过<b>部署层脚本注入</b>完成挂载；前置条件是<b>获得运维侧注入权限与安全评审通过</b>，而非交付前端代码（详见 3.3）</td></tr>
+  </tbody>
+</table>
+<p>这意味着本项目的实际工作量集中在<b>产品逻辑与内容准备</b>上，而不是底层能力建设。<b>课程—售前映射的可读性已确认</b>——二维码本身就是课程详情接口的一个字段（详见 <b>3.4 节</b>）。需要投入的不再是"找数据源"，而是<b>把图片形态的课程内容转成可检索文本</b>，这属于内容准备而非技术建设。此外，公司另有一套<b>已落地的同类系统</b>可作为技术起点，其 RAG 内核、转人工接点、负责人映射表与评测闭环均可复用，详见 <b>3.2 节</b>。需要补充的是，<b>前端接入同样不构成缺口</b>——即使当前没有官网源码，也可通过部署层脚本注入完成挂载，前置条件只是取得运维侧授权（详见 <b>3.3 节</b>）。</p>
+
+<h3>3.2 已有同类实现的可复用性评估：FDE「统一知识助手」</h3>
+<p>除上述四类现成资产外，还有一套<b>已落地的同类系统</b>可作为本项目的技术起点：FDE 课程实践中的「统一知识助手」（<code>D:\FDE</code>，FastAPI 单体 + PostgreSQL/pgvector + BGE-M3 + DeepSeek + Vue 3）。其已实现能力包括：隔离 RAG 问答、登录授权与空间成员、文档入库与下线、会话与跨会话记忆、未命中建单、主题负责人、进阶资料推荐（多步工具 Agent）、OCR、混合检索与重排、SSE 流式输出、评测闭环与发版门禁。</p>
+<div class="callout ok">
+  <div class="ct">结论：可复用价值高，但要区分"复用内核"与"复用整套"</div>
+  可<b>直接或改造后复用</b>的是：RAG 内核、「未命中 → 转人工」链路、负责人映射表、旁路推荐 Agent 编排、评测闭环、上下文与会话管理、OCR。<br>
+  <b>必须改造</b>的是四项结构性差异：身份模型、知识库内容、推荐能力、合规口径。<br>
+  <b>不可直接搬</b>的是：前端组件、登录体系。<br>
+  另需注意：该项目的自我定位是"<b>可演示、可验收的课程实践，不是生产基线</b>"，其上线差距清单明确列出无 SSO、无备份恢复、限流为进程内、可观测性薄弱、无内容安全审核等。因此它适合做<b>起点</b>，不适合做<b>成品</b>。
+</div>
+<table>
+  <thead><tr><th>FDE 已有能力</th><th>对应本项目需求</th><th>复用度</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td>文档入库管道（解析 / 切片 / 向量 / 状态机）</td><td>课程知识库构建</td><td><span class="tag t-ok">直接复用</span></td><td>支持 md / txt / pdf / docx / pptx；课程资料形态已覆盖</td></tr>
+    <tr><td>混合检索 + 重排（dense + 词法 + RRF + reranker）</td><td>R4 知识库问答</td><td><span class="tag t-ok">直接复用</span></td><td>检索质量调优是最费时间且不显形的工作，此处可直接继承</td></tr>
+    <tr><td>来源由召回记录生成、模型不得改写；未命中不调 LLM</td><td>幻觉风险治理</td><td><span class="tag t-ok">直接复用</span></td><td>与报告要求的"不得编造课程信息、价格、证书效力"完全同向</td></tr>
+    <tr><td>未命中 → 建学员工单（接在 <code>hit=false</code> 之后）</td><td>R6 转人工 / R8 敏感意图</td><td><span class="tag t-ok">高度同构</span></td><td><b>接点位置完全一致</b>：把"建工单"换成"弹售前二维码 + 落线索卡片"即可</td></tr>
+    <tr><td>主题负责人 <code>topic_owners</code>（关键词 → 负责人 + 联系方式）</td><td>R24 课程—售前映射</td><td><span class="tag t-ok">高度同构</span></td><td>把"主题关键词"换成"课程 ID"即是所需映射表；虽不能替代确认官网映射的存放位置，但<b>给出了一个已验证的实现范式</b>，不再需要从零设计</td></tr>
+    <tr><td>进阶资料推荐：旁路多步 Agent（检索 → LLM 判定相关性 → 改写再搜 → 成文）</td><td>R3 推荐引擎、R25 可解释可审计</td><td><span class="tag t-brand">最佳原型</span></td><td>其"候选 → 判定 → 有限次改写 → 输出理由"的编排，与"问诊 → 候选课程 → 适配度判定 → 推荐理由"是同一模式；且已解决"<code>ref_id</code> 不得编造"这一关键约束</td></tr>
+    <tr><td>评测脚本与发版门禁（<code>--mode oracle/live</code> + <code>--gate</code>）</td><td>答案准确率 / 幻觉率指标</td><td><span class="tag t-ok">直接复用</span></td><td><b>对"无基线数据"的处境尤其有用</b>：可先建立质量基线，再谈转化目标</td></tr>
+    <tr><td>会话、跨会话记忆、上下文滚动压缩</td><td>R9 会话保持、画像持久化</td><td><span class="tag t-ok">直接复用</span></td><td>对应"不让用户重答一遍"与长问诊的上下文管理</td></tr>
+    <tr><td>OCR（Qwen-VL 截图识文 → 走问答）</td><td>截图提问场景</td><td><span class="tag t-ok">直接复用</span></td><td>学员发截图问"这个报错怎么办"，售前场景同构</td></tr>
+    <tr><td>SSE 流式问答、文档运营后台、角色菜单收紧</td><td>交互与内容运营</td><td><span class="tag t-p1">可复用</span></td><td>接口契约与交互模式可继承</td></tr>
+    <tr><td>前端组件（Vue 3 + Element Plus）</td><td>官网悬浮球</td><td><span class="tag t-warn">不可直接搬</span></td><td>官网用 Ant Design Vue，组件库不同；可复用的是交互模式与 API 契约，不是组件代码</td></tr>
+    <tr><td>登录体系（自建用户名密码 + Session Cookie，无开放注册）</td><td>官网登录</td><td><span class="tag t-warn">须替换</span></td><td>必须对接官网现有 <code>/login</code>，不能自带一套账号</td></tr>
+    <tr><td>审计口径：日志不记录问题全文</td><td>R19 线索归因、R23 上下文传递</td><td><span class="tag t-warn">口径冲突</span></td><td>该项目出于隐私考虑刻意不记全文，而本项目<b>需要会话内容做归因与摘要推送</b>。此项须反向调整并明确告知用户</td></tr>
+  </tbody>
+</table>
+<h4 style="font-size:14px;font-weight:600;margin:24px 0 10px">四项必须改造的结构性问题</h4>
+<ol>
+  <li><b>身份模型相反——这是最大的结构性不匹配。</b>FDE 的设计前提是"无开放注册、必须登录才能提问"，检索空间由登录角色计算。而本项目的<b>主战场恰恰是未登录游客</b>（自然流量）。需要在其外增加"游客态"：允许空间指向公开课程知识，且<b>匿名会话必须能持续</b>，直到转人工或下单才引导登录。这是动到鉴权边界的事，不是加一个参数。</li>
+  <li><b>缺少"问诊"这一层——这是最大的新增开发量。</b>FDE 是纯被动答疑（问什么答什么）；本项目必须主动采集画像（身份、基础、目标、硬件条件）后再推荐。该模块在 FDE 中完全不存在，需从零开发。</li>
+  <li><b>推荐对象从"资料"变为"商品"，约束变多。</b>需引入价格带、体验课—正价课阶梯、开课时间，以及"不得承诺折扣与退费"的红线。<code>judge_relevance</code> 的判定标准要从"相关性"改为"<b>适配度</b>"。推荐权重无需销售侧评审，故判定标准由产品与技术共同定义即可，但需对判定依据留痕，以便向用户解释推荐理由（R25）。</li>
+  <li><b>部署形态需重新决定。</b>FDE 是独立 FastAPI 单体（BGE-M3 加载在 API 进程内），官网是 Vue SPA + <code>arboradmin.saikr.com</code> 后台。两条路径：一是 Agent 作为<b>独立服务</b>部署、官网前端嵌 UI（快，建议）；二是把内核<b>移植进现有后台</b>（重）。LLM 侧无阻碍——FDE 使用 OpenAI 兼容客户端 + 可配置 <code>CHAT_BASE_URL</code>，可直接指向 <code>openai.arborseek.com</code>。</li>
+</ol>
+<h4 style="font-size:14px;font-weight:600;margin:24px 0 10px">三种复用策略对比</h4>
+<table>
+  <thead><tr><th>策略</th><th>做法</th><th>优势</th><th>代价</th><th>建议</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>A. 只借方法论</b></td>
+      <td>把 FDE 作为参考实现阅读，在官网技术栈内另建</td>
+      <td>技术栈最统一；无跨服务集成问题</td>
+      <td>放弃已验证的检索调优、拒答策略与评测闭环，重走一遍弯路</td>
+      <td><span class="tag t-p2">备选</span></td>
+    </tr>
+    <tr>
+      <td><b>B. 搬内核、换外壳</b></td>
+      <td>以 FDE 为起点起独立服务，抽出 <code>parsers → chunker → embed → retrieve → generate → qa_service</code> 主链，加 <code>topic_owners</code>、旁路 Agent、评测脚本；替换知识库与业务规则，新增游客态、问诊层与转人工弹码；前端重写为 Ant Design Vue 悬浮球</td>
+      <td><b>省掉最贵的三件事</b>：检索质量调优、拒答与来源可信度、评测闭环</td>
+      <td>需处理跨服务集成、用户体系对接与生产化补齐</td>
+      <td><span class="tag t-ok">推荐</span></td>
+    </tr>
+    <tr>
+      <td><b>C. 整套复用</b></td>
+      <td>直接以 FDE 作为售前系统对外</td>
+      <td>启动最快</td>
+      <td>带着"必须登录""无推荐能力""审计不记全文"三个硬约束，且需补齐其自述的生产化缺口</td>
+      <td><span class="tag t-p0">不推荐</span></td>
+    </tr>
+  </tbody>
+</table>
+<p>建议采用 <b>B</b>，并先做一个只复用内核的最小版本（<b>仅"知识库问答 + 未命中转人工"</b>，不含问诊与推荐），用于验证匿名流量下的自助解决率。这样即使在问诊与推荐方案尚未定稿时，也能先拿到自然流量的真实基线。</p>
+
+<h3>3.3 接入方式与前置条件：在"没有官网代码"的前提下如何落地</h3>
+<div class="callout ok">
+  <div class="ct">核心判断：这不是技术障碍，而是协作授权问题</div>
+  "没有官网代码"这句话最容易被误读为"接不上"。但官网现有状态本身就否定了这个结论：站点持续运营、有独立业务后台（<code>arboradmin.saikr.com</code>）、有 LLM 网关（<code>openai.arborseek.com</code>）、后台还有 AI 供应商管理页。<b>这些都说明存在一支能够改动与部署该站的技术力量</b>，只是产品侧尚未接触到。因此更准确的描述是：<b>产品侧没有代码，不等于公司没有代码。</b>
+</div>
+<p>更进一步，<b>Agent 接入官网并不必然需要前端源码</b>。业界第三方客服系统（美洽、网易七鱼、Intercom 等）接入客户官网的标准方式，就是要求对方在页面中增加一行脚本——它对官网的全部要求是"多一行 <code>&lt;script&gt;</code>"，而不需要交出源代码。本方案可以采用同一模式。</p>
+
+<h4 style="font-size:14px;font-weight:600;margin:24px 0 10px">四条接入路径（按前置条件由轻到重）</h4>
+<table>
+  <thead><tr><th>路径</th><th>前置条件</th><th>改动点</th><th>侵入性</th><th>能达成的能力</th><th>建议</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><b>P0 · 独立部署，先行服务售前内部</b></td>
+      <td>一台服务器 + 一个（二级）域名</td>
+      <td><b>完全不碰官网</b></td>
+      <td><span class="tag t-ok">无</span></td>
+      <td>知识库问答、推荐查询、标准话术、评测闭环；无前台自然流量</td>
+      <td><span class="tag t-ok">立即启动</span></td>
+    </tr>
+    <tr>
+      <td><b>P1 · 部署层脚本注入</b></td>
+      <td>能接触 Nginx / CDN 配置，或前端构建流程</td>
+      <td>在 HTML 响应中注入一段 <code>&lt;script src="…/widget.js"&gt;</code></td>
+      <td><span class="tag t-ok">低（可随时摘除，可灰度）</span></td>
+      <td>悬浮球、问诊、推荐、转人工、<b>Agent 侧完整埋点</b></td>
+      <td><span class="tag t-ok">首选上线方式</span></td>
+    </tr>
+    <tr>
+      <td><b>P2 · 单点组件替换</b></td>
+      <td>能协调改一个前端组件</td>
+      <td>复用现有"咨询"弹窗位置，改为内嵌 Agent 面板</td>
+      <td><span class="tag t-p1">中</span></td>
+      <td>上述全部能力 + <b>入口归一（R22 一并完成）</b></td>
+      <td><span class="tag t-ok">与 P1 组合</span></td>
+    </tr>
+    <tr>
+      <td><b>P3 · 完整前端集成</b></td>
+      <td>取得前端源码与构建流程</td>
+      <td>原生组件、路由联动、登录态直读、详情页上下文</td>
+      <td><span class="tag t-p0">高</span></td>
+      <td>体验最优：感知当前课程、深链板块、下单衔接</td>
+      <td><span class="tag t-p1">目标态，非第一期必需</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h4 style="font-size:14px;font-weight:600;margin:24px 0 10px">四个关键技术判断</h4>
+<ol>
+  <li><b>挂载方式：脚本直嵌（Shadow DOM 隔离）优先，iframe 作为保守备选。</b>脚本直嵌无跨域问题、样式隔离可控、可读取同域存储，是主流客服的做法；iframe 隔离更彻底、下线更容易，但有跨域通信与移动端高度适配的麻烦。<b>建议前者，后者的优势仅在于"更容易被运维方接受"。</b></li>
+  <li><b>登录态：脚本注入方式明显优于 iframe。</b>官网登录态通常存放在 <code>localStorage</code> 或 Cookie 中；注入脚本运行在同域下，<b>可直接读取，不需要官网前端配合</b>。若走 iframe 且跨子域，则必须由官网前端通过 <code>postMessage</code> 主动传递，<b>这就重新依赖了源码改造</b>。结论：<b>R9（登录态与会话保持）在脚本注入路径下的实现难度显著更低。</b></li>
+  <li><b>课程上下文：即使不改源码也能拿到，但方式要降级。</b>拿不到组件级数据时，有两条替代：一是从 <code>window.location.pathname</code> 解析 <code>/course/:courseId</code>（该路由约定已在 2.4 节确认），即可判断用户当前浏览的课程；二是直接读取详情页 DOM 标题与板块锚点。因此 <b>R10（详情页板块深链）与"感知当前课程"在无源码条件下仍可实现</b>，代价是从接口取数降级为路由解析 + DOM 读取，稳定性略低、需随页面改版维护。</li>
+  <li><b>埋点：Agent 侧可完全自闭环，官网原生行为需要小改造。</b>脚本注入本身就能承担全部 Agent 侧埋点（会话触发、问诊完成、推荐曝光与点击、转人工、来源标识）。真正的缺口只在官网原生行为——浏览路径、详情页停留、是否到达支付页。其中<b>路由跳转可通过监听 SPA 的 history 变化获得，不依赖源码</b>；只有"是否完成支付"这一步需要官网或后台配合。</li>
+</ol>
+
+<h4 style="font-size:14px;font-weight:600;margin:24px 0 10px">真正需要拿到的不是代码，而是三样东西</h4>
+<ol>
+  <li><b>部署层的一处脚本注入权限</b>（Nginx / CDN / 或前端构建流程中的一处）；</li>
+  <li><b>现有"咨询"按钮的实现位置</b>——用于 P2 复用与完成 R22 入口归一；</li>
+  <li><b>课程—售前映射的读取方式</b>——已实测定案为课程详情接口字段直读（见 3.4），本项只需确认该字段的配置与维护方式。</li>
+</ol>
+<p>三者均<b>不要求交付整套源码</b>，属于协作授权范畴。这也是本方案在此前提下的落地要点：<b>把"要代码"的诉求，换成"要三处授权"的诉求</b>。现官网维护方已确认为<b>内部技术团队</b>，沟通对象明确、不跨组织，"三处授权"的可达成性进一步提高；同时内部团队具备改源码能力，<b>P2（单点组件替换）与 P3（完整集成）也更具可行性</b>，入口归一（R22）可借源码改造更干净地实现。</p>
+
+<h4 style="font-size:14px;font-weight:600;margin:24px 0 10px">分阶段落地路线</h4>
+<ol>
+  <li><b>第一步（现在即可启动，不受任何授权阻塞）：</b>独立部署 Agent，先落"知识库问答 + 未命中转人工"，<b>优先服务售前内部</b>（对应 R21）。既验证检索质量与推荐准确性，也积累真实语料与评测基线。</li>
+  <li><b>第二步：</b>取得部署层注入权限后上线前台悬浮球，跑通匿名自然流量，开始采集分层基线（R7）。</li>
+  <li><b>第三步：</b>与现有"咨询"弹窗合并，完成入口归一（R22），实现"先 Agent 后扫码"的标准动作。</li>
+  <li><b>第四步：</b>取得源码后做上下文深度集成（P3），补齐体验最优项。</li>
+</ol>
+<div class="callout warn">
+  <div class="ct">无源码路径的三项现实阻力（非技术难点）</div>
+  <b>① 安全与合规审查：</b>向生产站点注入第三方脚本通常需要过安全评审（脚本来源可信、数据留存与出境、CSP 策略）。<b>② CSP 策略（已实测）：</b>对站点发起的真实请求显示，响应头中<b>当前未包含 <code>Content-Security-Policy</code>，注入不会在此环节被拦截</b>，原设想的"策略拦截"并非现实障碍；但若安全侧后续启用严格 CSP 而未放行本项目来源，<b>已上线的悬浮球会被整体拦截</b>，属上线后才暴露的故障。因此本条仍需向官网确认<b>是否有启用计划并预留来源白名单</b>——<b>"完全不需要对方配合"仍不成立，只是配合点从"解除拦截"前移为"预留白名单"，沟通成本显著下降</b>。<b>③ 内部排期与优先级竞争：</b>脚本注入属官网团队本职工作之外的需求，需明确排入其内部迭代计划、确定优先级与排期窗口，避免被主线需求长期挤占。<b>这三点（安全合规、CSP、内部排期）都应在启动前先摸清，避免在开发末期才暴露。</b>
+</div>
+
+<h3>3.4 课程详情接口实测：字段可用性核对</h3>
+<p>业务方提供了课程详情接口的真实返回样本（课程 <code>id=40</code>「WorkBuddy AI 助手实战课程」）。该样本<b>同时回答了两个此前悬置的问题</b>：课程数据能否程序化获取，"课程 → 售前"的映射在哪里。</p>
+<div class="callout ok">
+  <div class="ct">关键缺口关闭：售前二维码就是接口字段</div>
+  返回体中<b>直接存在 <code>pre_sale_service_qrcode</code> 字段</b>。这意味着"课程 → 售前"的映射<b>不需要另外寻找一张配置表</b>——按课程 ID 调用详情接口即可取得该课程的售前二维码地址。<b>R24 的实现方式由此确定为"接口字段直读"，复杂度为低。</b>
+</div>
+<p><b>推荐引擎所需字段的可用性核对：</b></p>
+<table>
+  <thead><tr><th>用途</th><th>接口字段</th><th>可用性</th></tr></thead>
+  <tbody>
+    <tr><td>课程标识与类型</td><td><code>id</code>、<code>course_type</code>（recorded / recorded_open）</td><td><span class="tag t-ok">可用</span></td></tr>
+    <tr><td>标题与卖点</td><td><code>title</code>、<code>subtitle</code>、<code>course_features[]</code>（图标 + 标题 + 说明）</td><td><span class="tag t-ok">可用</span></td></tr>
+    <tr><td>分类</td><td><code>category{id, name}</code></td><td><span class="tag t-warn">仅列表 / 推荐接口返回</span>，详情接口未含</td></tr>
+    <tr><td>标签</td><td><code>tags[]{id, name, color}</code></td><td><span class="tag t-ok">可用</span>，含颜色值，可直接用于卡片渲染</td></tr>
+    <tr><td><b>难度分级</b></td><td><code>difficulty_level</code>（1–3）</td><td><span class="tag t-ok">可用</span>（在推荐列表中返回，主对象未含）</td></tr>
+    <tr><td>价格</td><td><code>price</code>、<code>original_price</code>、<code>is_free</code></td><td><span class="tag t-ok">可用</span>（注意类型不一致，见下）</td></tr>
+    <tr><td>阶梯 / 团购价</td><td><code>price_tiers[]</code>（人数区间 → 单价）</td><td><span class="tag t-warn">可用但口径存疑</span></td></tr>
+    <tr><td>有效期</td><td><code>validity</code>（如"长期有效"）</td><td><span class="tag t-ok">可用</span>（列表接口返回）</td></tr>
+    <tr><td>促销与紧迫感</td><td><code>badge</code>（hot / new）、<code>countdown{}</code>、<code>flash_sale</code>、<code>group_buy_activity</code></td><td><span class="tag t-ok">可用</span>（倒计时业务规则待确认）</td></tr>
+    <tr><td>报名状态（登录态感知）</td><td><code>can_join</code>、<code>is_enrolled</code>、<code>purchased_chapter_ids[]</code>、<code>student_info</code></td><td><span class="tag t-ok">可用</span>——未登录时返回默认值，登录后可判断"已报名 / 已购章节"，<b>直接支撑 R9 与已购学员的话术切换</b></td></tr>
+    <tr><td>学习模式</td><td><code>learning_mode</code>、<code>unlock_mode</code>、<code>renewal_enabled</code></td><td><span class="tag t-ok">可用</span></td></tr>
+    <tr><td>师资</td><td><code>teachers[]</code>、<code>tutor{wechat, qrcode, remark}</code></td><td><span class="tag t-warn">字段存在，样本为空</span>；<code>tutor.remark</code>（加好友备注模板）可直接复用为转人工引导文案</td></tr>
+    <tr><td><b>售前二维码</b></td><td><code>pre_sale_service_qrcode</code></td><td><span class="tag t-ok">可用</span>——<b>即 R24 所需字段</b></td></tr>
+    <tr><td>课程正文</td><td><code>full_description</code>、<code>h5_description</code></td><td><span class="tag t-risk">仅图片</span>——纯 <code>&lt;div&gt;&lt;img&gt;</code> 结构，无可检索文本</td></tr>
+    <tr><td>课程大纲 / 章节、适用人群、结业证书、常见问题</td><td>——</td><td><span class="tag t-risk">未出现</span>，疑需独立接口或前端静态内容</td></tr>
+  </tbody>
+</table>
+<div class="callout warn">
+  <div class="ct">需要注意：接口字段比"9 板块"更结构化，但仍有两块空白</div>
+  <b>好消息：</b>推荐引擎真正需要的机器可读字段（价格、难度、分类、标签、卖点、报名状态）比预期完整，<b>难度分级 <code>difficulty_level</code> 的存在尤其有价值</b>——它让"零基础 / 有经验"的硬匹配有了直接依据，不必再从正文里猜。<br>
+  <b>需正视：</b>① 详情正文与 9 板块中的多数内容<b>以图片承载</b>，LLM 无法直接检索，知识库需要文本化（见风险表与 R28）；② 返回体 <code>recommended_courses</code> 已<b>自带推荐位</b>，说明官网现有推荐逻辑可作参考基线，也可直接复用为 Agent 候选集的一部分。<br>
+  <b>另有三处数据口径疑点</b>需在 PRD 前对齐：阶梯价单价随人数上升、<code>price</code> 与 <code>original_price</code> 类型不一致、<code>student_count</code> 与 <code>badge</code> 不匹配（详见第 12 节）。
+</div>
+
+<h2>4. 行业基准参考</h2>
+<table>
+  <thead><tr><th>指标</th><th>行业参考水平</th><th>来源案例类型</th></tr></thead>
+  <tbody>
+    <tr><td>首轮问题解决率</td><td>约 85%</td><td>教育行业智能客服方案</td></tr>
+    <tr><td>平均响应时间</td><td>由 15–30 分钟降至 1 分钟内</td><td>K12 培训机构 / 连锁培训学校</td></tr>
+    <tr><td>咨询到试听转化率</td><td>提升约 28%</td><td>K12 培训机构（夜间时段）</td></tr>
+    <tr><td>新生报名转化率</td><td>提升约 40%</td><td>全国连锁培训学校</td></tr>
+    <tr><td>人工客服成本</td><td>下降 35%–45%</td><td>考研机构 / 在线教育机构</td></tr>
+    <tr><td>线索响应时间</td><td>缩短约 80%</td><td>EdTech 平台（90 天报名量翻倍，单线索成本降 45%）</td></tr>
+  </tbody>
+</table>
+<div class="callout">
+  <div class="ct">口径风险提示</div>
+  上述数据均来自第三方厂商营销案例，缺少统一统计口径与对照实验条件。<b>在官网无基线数据的情况下，这些数字只能作为方向性参考，不能作为立项 ROI 依据，也不建议写进 KPI。</b>正式目标值应在 MVP 上线运行 2–4 周、取得基线后再行设定。
+</div>
+
+<h2>5. 目标用户与场景</h2>
+<h3>5.1 用户分层</h3>
+<table>
+  <thead><tr><th>用户类型</th><th>典型诉求</th><th>决策特征</th><th>本期建议</th></tr></thead>
+  <tbody>
+    <tr><td>高校大学生（核心）</td><td>学具身智能 / ROS / 仿真，为竞赛、保研、就业加筹码</td><td>预算敏感、决策快、价格带 ¥4.9–¥699</td><td><span class="tag t-p0">MVP 覆盖</span></td></tr>
+    <tr><td>高校教师 / 实验室负责人</td><td>课程共建、实验平台、师资培训、整体采购</td><td>周期长、需方案与报价、多角色决策</td><td><span class="tag t-p1">V1 留资转商务</span></td></tr>
+    <tr><td>企业工程师 / 集成商</td><td>技术栈补齐、行业方案选型</td><td>看重实战与落地案例</td><td><span class="tag t-p1">V1 单独话术</span></td></tr>
+    <tr><td>K12 学生与家长</td><td>机器人启蒙、研学营、竞赛启蒙</td><td>家长决策、关注安全与效果</td><td><span class="tag t-p2">V2 谨慎评估</span></td></tr>
+    <tr><td><b>售前人员（内部用户）</b></td><td>快速回答学员疑问、给出可信推荐、减少重复劳动</td><td>追求效率与话术统一，对"抢单"敏感</td><td><span class="tag t-ok">V1 内部端</span></td></tr>
+  </tbody>
+</table>
+<p><b>补充说明：</b>售前人员是本期容易遗漏但不可缺席的用户角色。Agent 若只对学员侧生效，其产出（推荐结果、问诊结论）无法被售前复用，双方话术还会出现口径冲突；反之若售前是使用者，Agent 的推荐质量可以在真实对话中快速被验证和修正。</p>
+
+<h3>5.2 关键使用场景</h3>
+<ol>
+  <li><b>选课困惑（最高频）：</b>面对"ROS2""VLA""具身智能""仿真抓取"等术语，学员无法判断自己该从哪门开始。这是最需要 Agent 介入、也最容易见效的场景。</li>
+  <li><b>不愿扫码的自然流量：</b>学员想先了解清楚再决定要不要加微信。现有入口要求他先做出"加陌生人微信"的决定，这一步挡住了大量只是想问问的人。</li>
+  <li><b>非工作时段咨询：</b>学生晚间与周末是咨询高峰，而扫码后仍需等人工回复，两者天然错配。</li>
+  <li><b>临门一脚的摩擦：</b>已被售前预热、目标明确的学员回到官网时，仍需自行完成登录与下单，中途跳出即前功尽弃。</li>
+  <li><b>售前重复劳动：</b>售前在微信中反复回答相同的价格、难度、基础要求类问题，缺少可复用的标准答案与快速推荐工具。</li>
+</ol>
+
+<h2>6. 需求池与优先级建议</h2>
+<table>
+  <thead><tr><th>编号</th><th>需求</th><th>用户价值</th><th>复杂度</th><th>优先级</th></tr></thead>
+  <tbody>
+    <tr><td>R1</td><td>全站悬浮式售前助手入口，覆盖首页 / 课程列表 / 课程详情</td><td>高</td><td>低</td><td><span class="tag t-p0">P0</span></td></tr>
+    <tr><td>R2</td><td>问诊式多轮对话，采集身份、基础、目标、硬件条件等画像字段</td><td>高</td><td>中</td><td><span class="tag t-p0">P0</span></td></tr>
+    <tr><td>R3</td><td>基于课程商品库与"适用人群"的推荐卡片（含价格、难度、适配理由、对比）</td><td>高</td><td>中</td><td><span class="tag t-p0">P0</span></td></tr>
+    <tr><td>R4</td><td>课程知识库问答，按详情页 9 大板块组织内容</td><td>高</td><td>中</td><td><span class="tag t-p0">P0</span></td></tr>
+    <tr><td>R5</td><td>低门槛转化动作：一键跳转低价体验课购买 / 领取学习路径图</td><td>高</td><td>低</td><td><span class="tag t-p0">P0</span></td></tr>
+    <tr><td>R6</td><td><b>转人工：复用现有"咨询"二维码弹窗</b>，按意向课程调用<b>现有课程—售前映射</b>交付给对应售前人员（付费前唯一可承接方）</td><td>高</td><td>低</td><td><span class="tag t-p0">P0</span></td></tr>
+    <tr><td>R7</td><td>会话日志与埋点体系（含基线指标采集，为后续设目标做准备）</td><td>高</td><td>低</td><td><span class="tag t-p0">P0</span></td></tr>
+    <tr><td>R8</td><td>敏感意图拦截：价格让利、退费承诺、B2B 采购等自动转人工</td><td>高</td><td>低</td><td><span class="tag t-p0">P0</span></td></tr>
+    <tr><td>R9</td><td><b>登录态与会话保持</b>：未登录下单时引导登录，登录后恢复会话与推荐记录</td><td>高</td><td>中</td><td><span class="tag t-p0">P0</span></td></tr>
+    <tr><td>R10</td><td><b>详情页板块深链</b>：回答"适合谁""有证书吗"等问题时可直接跳转对应板块锚点</td><td>中</td><td>低</td><td><span class="tag t-p0">P0</span></td></tr>
+    <tr><td>R18</td><td><b>售前语料沉淀</b>：从现有售前微信沟通记录中抽取高频问题、学员顾虑与促成话术，作为知识库与问诊脚本一手素材</td><td>高</td><td>中</td><td><span class="tag t-p0">P0</span></td></tr>
+    <tr><td>R19</td><td><b>线索来源标记与归因</b>：区分自然流量 / 售前引流，并<b>记录学员"最近一次人工接触的售前"及其时间与渠道</b>——该记录既是业绩归属规则的判定依据，也是避免重复打扰售前已接触学员的前提。<b>企业微信支持自动归因</b>（依赖「联系我」活码参数与企微后台读取权限）</td><td>高</td><td>中</td><td><span class="tag t-p0">P0</span></td></tr>
+    <tr><td>R20</td><td><b>已决策用户短路径</b>：识别"已想好要买哪门"的意图或带参进入的预热用户，跳过问诊直接进入购买</td><td>高</td><td>低</td><td><span class="tag t-p0">P0</span></td></tr>
+    <tr><td>R22</td><td><b>入口归一</b>：将现有"咨询"按钮与 Agent 悬浮球合并为一个入口，先由 Agent 承接，用户坚持找人或触发转人工规则时才弹二维码</td><td>高</td><td>低</td><td><span class="tag t-p0">P0</span></td></tr>
+    <tr><td>R24</td><td><b>售前二维码的获取与兜底</b>：<b>实现方式已实测定案——按推荐结果的课程 ID 调用课程详情接口，直读 <code>pre_sale_service_qrcode</code> 字段，无需自建映射表</b>；若该字段替换为企业微信「联系我」码，则可同时获得来源参数（支撑 R19）。需提供字段为空或无对应售前时的兜底码，并做二维码有效性校验</td><td>高</td><td>低</td><td><span class="tag t-p0">P0</span></td></tr>
+    <tr><td>R25</td><td><b>推荐依据轻量留痕</b>：每条推荐记录命中的规则、课程字段依据与时间，用于向用户解释推荐理由、并向售前说明课程线分布。<b>推荐权重无需销售侧评审机制</b>，故不建评审流程与例会，仅保留留痕</td><td>中</td><td>中</td><td><span class="tag t-p2">P2</span></td></tr>
+    <tr><td>R26</td><td><b>接入方式与挂载点</b>：以<b>脚本注入（Shadow DOM 隔离）</b>方式挂载至官网，<b>不依赖前端源码交付</b>；提供 iframe 作为保守备选；Agent 侧埋点自闭环</td><td>高</td><td>低</td><td><span class="tag t-p0">P0</span></td></tr>
+    <tr><td>R27</td><td><b>归属数据支撑</b>：按"最近一次人工接触的售前"输出可用于业绩核算的归属建议，标注接触时间、渠道与是否为自然流量成交，供管理与销售侧核对</td><td>高</td><td>低</td><td><span class="tag t-p0">P0</span></td></tr>
+    <tr><td>R28</td><td><b>课程内容文本化</b>：详情正文与 9 板块内容以图片承载，需转为可检索文本（OCR 批量转换或运营补录），作为知识库与推荐理由的依据</td><td>高</td><td>中</td><td><span class="tag t-p1">P1</span></td></tr>
+    <tr><td>R11</td><td>行为触发主动唤起（如详情页停留超阈值弹出推荐）</td><td>中</td><td>中</td><td><span class="tag t-p1">P1</span></td></tr>
+    <tr><td>R12</td><td>线索打分与分层，自动生成跟进任务与培育提醒</td><td>中</td><td>中</td><td><span class="tag t-p1">P1</span></td></tr>
+    <tr><td>R13</td><td>企微 / 公众号多渠道接入，会话上下文互通</td><td>高</td><td>高</td><td><span class="tag t-p1">P1</span></td></tr>
+    <tr><td>R14</td><td>赛氪人群定向数据用于推荐冷启动（仅作信号，不做跨品牌分发）</td><td>中</td><td>高</td><td><span class="tag t-p1">P1</span></td></tr>
+    <tr><td>R21</td><td><b>售前辅助模式（内部端）</b>：售前在与学员对话时可查询推荐结果、标准话术与课程对比。<b>该模块不依赖任何官网改造，可独立部署先行验证，安排在第一期</b></td><td>高</td><td>中</td><td><span class="tag t-p0">P0</span></td></tr>
+    <tr><td>R23</td><td><b>转人工上下文传递</b>：弹二维码前，把学员画像、意向课程与咨询摘要同步给对应售前。<b>企业微信环境下属程序化推送</b>（企微客户联系 / 应用消息接口），并在内部端留档供 R21 查询；接口未开放时降级为在弹窗内展示可复制摘要</td><td>高</td><td>中</td><td><span class="tag t-p1">P1</span></td></tr>
+    <tr><td>R15</td><td>优惠券 / 折扣券自动发放（需明确授权边界）</td><td>中</td><td>中</td><td><span class="tag t-p2">P2</span></td></tr>
+    <tr><td>R16</td><td>学习后链路：开课提醒、完课引导、复购推荐</td><td>中</td><td>高</td><td><span class="tag t-p2">P2</span></td></tr>
+    <tr><td>R17</td><td>集团级跨品牌推荐（深蓝学院、优研升课程与赛事）</td><td>—</td><td>高</td><td><span class="tag t-p2">本期移出</span></td></tr>
+  </tbody>
+</table>
+
+<h2>7. 功能分层建议</h2>
+<div class="grid">
+  <div class="card">
+    <div class="tag t-ok">MVP · 建议 4–6 周</div>
+    <p style="margin-top:10px"><b>目标：把"扫码"从第一步变成最后一步，让自然流量在官网内先被接住。</b></p>
+    <ul style="margin:0;padding-left:18px">
+      <li><b>独立部署 + 脚本注入挂载（不依赖官网源码交付）</b></li>
+      <li><b>售前内部端先行（推荐查询与标准话术），先于前台流量验证质量</b></li>
+      <li><b>入口归一：现有"咨询"按钮与 Agent 合并为一个入口</b></li>
+      <li>欢迎语 + 4–5 轮结构化问诊（对已决策用户走短路径）</li>
+      <li>规则匹配 + LLM 生成理由，输出 2–3 门课</li>
+      <li>知识库按详情页 9 板块 + <b>售前语料</b>共同组织</li>
+      <li>低价体验课 CTA</li>
+      <li><b>转人工复用现有二维码弹窗，按课程调用现有售前映射</b>（企微「联系我」码，含兜底码）</li>
+      <li><b>课程—售前映射的读取与配置能力</b></li>
+      <li>登录态引导与会话保持</li>
+      <li>敏感问题转人工 + 兜底话术</li>
+      <li><b>线索来源标记（自然流量 / 售前引流）</b></li>
+      <li><b>完整埋点体系（基线采集为 MVP 必做项）</b></li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="tag t-brand">V1 · 建议 +6–8 周</div>
+    <p style="margin-top:10px"><b>目标：基于基线数据提升转化效率，并把 Agent 变成售前的工具而非对手。</b></p>
+    <ul style="margin:0;padding-left:18px">
+      <li><b>售前内部端增强（推荐依据追溯、话术沉淀回流）</b></li>
+      <li><b>推荐依据留痕与课程线线索分布同步</b></li>
+      <li><b>转人工上下文传递（画像 + 意向 + 摘要）</b></li>
+      <li>行为触发主动唤起（对售前引流用户降频）</li>
+      <li>线索打分分层 + 自动跟进任务</li>
+      <li>企微 / 公众号多渠道接入</li>
+      <li>依据基线设定并监控目标值</li>
+      <li>B2B 分流话术与商务线索卡片</li>
+      <li>知识库运营后台（教研自助维护）</li>
+      <li>赛氪人群定向数据接入</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="tag t-p2">V2 · 视数据表现</div>
+    <p style="margin-top:10px"><b>目标：从转化工具升级为增长引擎。</b></p>
+    <ul style="margin:0;padding-left:18px">
+      <li>券与折扣的智能发放</li>
+      <li>会话内下单闭环</li>
+      <li>学习后链路的复购与续费</li>
+      <li>多模态（语音、图片识别作业）</li>
+    </ul>
+  </div>
+</div>
+
+<h2>8. EARS 需求描述（关键需求）</h2>
+
+<div class="ears">
+  <div class="k">Ubiquitous · 普遍约束</div>
+  <div class="v">系统<em>应</em>始终基于课程商品库与详情页的真实数据生成推荐与课程信息，<b>不得</b>编造课程名称、价格、开课时间、师资、证书效力与优惠内容。</div>
+</div>
+
+<div class="ears">
+  <div class="k">Event-driven · 事件驱动</div>
+  <div class="v">当访客在课程详情页连续停留超过 30 秒且未点击购买时，系统<em>应</em>主动展示售前助手入口，并以该课程为上下文生成开场白；<b>若该访客带有售前引流来源标记，系统应降低主动唤起频次</b>，避免与售前人员形成重复打扰。</div>
+</div>
+
+<div class="ears">
+  <div class="k">State-driven · 状态驱动（一）</div>
+  <div class="v">当会话已采集到"学员身份、技术基础、学习目标"三项必要信息时，系统<em>应</em>输出不少于 2 门、不多于 3 门课程的推荐，并附上每门课的适配理由与价格差异说明。</div>
+</div>
+
+<div class="ears">
+  <div class="k">State-driven · 状态驱动（二）</div>
+  <div class="v">当系统识别到学员已明确指明目标课程，或该学员由售前人员引导进入时，系统<em>应</em>跳过问诊环节，直接提供该课程的购买入口、开课信息与关键条款确认，<b>不得</b>强制其重新完成问诊流程。</div>
+</div>
+
+<div class="ears">
+  <div class="k">State-driven · 状态驱动（三）</div>
+  <div class="v">当触发转人工时，系统<em>应</em>依据学员的意向课程，从<b>现有课程—售前映射</b>中取出对应售前人员的微信二维码展示；<b>若该课程无对应售前，或所需售前不在服务时段</b>，系统<em>应</em>展示兜底二维码或通用联系方式，<em>不得</em>展示空白弹窗或与课程无关的售前。</div>
+</div>
+
+<div class="ears">
+  <div class="k">Unwanted · 异常处理（一）</div>
+  <div class="v">如果学员在未登录状态下发起购买或点击下单，则系统<em>应</em>保留当前会话、画像与推荐记录，并在登录完成后自动恢复至原流程，不得要求用户重新发起咨询。</div>
+</div>
+
+<div class="ears">
+  <div class="k">Unwanted · 异常处理（二）</div>
+  <div class="v">如果学员的提问涉及价格让利、退费承诺、发票开具、B2B 采购合作，或连续 2 轮无法被知识库匹配，则系统<em>应</em>立即停止自动应答，<b>复用官网现有的二维码弹窗</b>展示该课程的售前人员企业微信，并将画像与咨询摘要<b>同步推送至对应售前</b>（企微接口未开放时，退化为在弹窗内展示可复制的摘要）。</div>
+</div>
+
+<div class="ears">
+  <div class="k">Unwanted · 异常处理（三）</div>
+  <div class="v">如果学员在非售前工作时段发起转人工，则系统<em>应</em>明确告知预计响应时间并保留会话与画像，且<em>应</em>保证线索落库后于下一个工作时段被交付，<b>不得</b>以"已转人工"作为终止状态而不交付。</div>
+</div>
+
+<div class="ears">
+  <div class="k">Optional · 可选能力</div>
+  <div class="v">在学员主动点击"咨询"或表达"找人工"意图时，系统<em>应</em>先由 Agent 承接一次问询；仅当学员坚持要求人工、或提问命中转人工规则时，才<em>应</em>展示售前人员微信二维码。</div>
+</div>
+
+<h2>9. 推荐逻辑设计建议</h2>
+<h3>9.1 画像维度</h3>
+<p>前 4 项为问诊必答，后 4 项通过对话自然补齐；括号内为可直接对接的详情页字段。</p>
+<table>
+  <thead><tr><th>维度</th><th>取值示例</th><th>用途</th></tr></thead>
+  <tbody>
+    <tr><td>身份</td><td>高中生 / 本科生 / 研究生 / 高校教师 / 企业工程师</td><td>决定课程层级与话术</td></tr>
+    <tr><td>技术基础</td><td>零基础 / 会编程无机器人经验 / 有 ROS 经验 / 有实机经验</td><td>对照<b>课程目录</b>判断难度起点</td></tr>
+    <tr><td>学习目标</td><td>竞赛备赛 / 毕设 / 保研就业 / 科研 / 教学</td><td>决定推荐方向与实证材料</td></tr>
+    <tr><td>硬件条件</td><td>无设备 / 树莓派·Jetson / 宇树 Go2 / 机械臂 / 只有电脑</td><td>决定"仿真课"还是"实机课"</td></tr>
+    <tr><td>专业背景</td><td>自动化 / 计算机 / 机械 / 电子 / 其他</td><td>软排序加权</td></tr>
+    <tr><td>时间投入</td><td>每周 &lt; 5 小时 / 5–10 小时 / &gt; 10 小时</td><td>对照<b>学习安排</b>匹配课程强度</td></tr>
+    <tr><td>预算区间</td><td>&lt; ¥100 / ¥100–¥500 / &gt; ¥500</td><td>决定价格带落点</td></tr>
+    <tr><td>证书诉求</td><td>需要认证 / 不需要</td><td>对照<b>结业证书</b>板块</td></tr>
+    <tr><td><b>来源与预热状态</b></td><td>自然流量 / 售前引流 / 已指定课程</td><td>决定问诊深度与主动唤起策略，是短路径判断的依据</td></tr>
+  </tbody>
+</table>
+
+<h3>9.2 推荐策略</h3>
+<ol>
+  <li><b>硬匹配过滤：</b>以详情页"课程目录"与"适用人群"为主要依据做硬性过滤。无设备的学员不推实机实训营，否则必然流失。</li>
+  <li><b>软排序加权：</b>在候选中按目标契合度、价格带契合度、时间投入契合度加权排序，取 Top 3。</li>
+  <li><b>阶梯式呈现：</b>推荐结果必须体现"先低价试 → 再升单"的路径，例如同时给出 ¥5.9 体验课与 ¥599 正价课，并说明二者关系。</li>
+  <li><b>理由必须可解释：</b>每条推荐需明确说明"为什么推荐这门课"，并优先引用适用人群、学习安排等真实课程字段。</li>
+  <li><b>预热感知与短路径：</b>对已由售前引导进入或已明确指定课程的学员，跳过问诊直接给出购买入口与关键条款确认。</li>
+  <li><b>转人工是收敛而非失败：</b>当问题超出知识库范围时，优先弹二维码而非强行作答。<b>判断标准是"人工答得更好"，而不是"机器答不出来"。</b></li>
+  <li><b>冷启动方案：</b>初期采用"规则匹配 + LLM 生成理由"的混合方式保证输出稳定；知识库内容优先取自详情页 9 板块与售前真实语料；积累会话数据后再引入向量召回提升精度。</li>
+</ol>
+
+<h2>10. 数据指标建议</h2>
+<div class="callout brand">
+  <div class="ct">因暂无基线数据，且成交归因尚未分离，指标分两阶段推进</div>
+  <b>阶段一（MVP 上线后 2–4 周）：只采集、不考核。</b>建立完整埋点与来源标记，取得<b>分层基线</b>（自然流量 / 售前引流两套口径），确认漏斗中的量级与流失分布。<br>
+  <b>阶段二：基于基线设定目标。</b>以分层基线为起点设定可量化的提升目标与验收标准，写入 PRD 与后续考核。<br>
+  <b>重要口径提示：</b>官网订单中相当一部分由售前引流产生，若不分层直接看"官网转化率"，会把人工的功劳算到 Agent 头上，或反过来掩盖 Agent 的真实增量。
+</div>
+<table>
+  <thead><tr><th>层级</th><th>指标</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td rowspan="2">北极星</td><td>Agent 引导成交订单数</td><td>直接衡量商业价值，<b>需按来源分层统计</b></td></tr>
+    <tr><td>有效留资线索数</td><td>衡量线索资产积累</td></tr>
+    <tr><td rowspan="15">过程指标</td><td>会话触发率</td><td>访问 UV 中主动发起对话的比例</td></tr>
+    <tr><td><b>咨询入口点击率（改造前后对比）</b></td><td>入口归一后的直接效果，验证是否比"点咨询直接弹码"更有效</td></tr>
+    <tr><td>问诊完成率</td><td>完成全部问诊轮次的比例；对已预热用户的短路径需单独统计</td></tr>
+    <tr><td>推荐点击率</td><td>推荐卡片被点击的比例</td></tr>
+    <tr><td>详情页板块深链点击率</td><td>衡量回答是否有效解决了具体疑问</td></tr>
+    <tr><td><b>自助解决率</b></td><td>Agent 解决问题且未转人工的比例，是"把扫码变成最后一步"的核心验证指标</td></tr>
+    <tr><td><b>扫码转化率与加好友率</b></td><td>弹码次数 → 实际扫码 → 加好友，衡量转人工环节的真实损耗。<b>企业微信环境下可分段统计</b>：Agent 侧记录弹码与二维码曝光，企业微信侧提供「联系我」码的来源渠道与新增客户数（需企微后台权限）；权限未开放时回退为 Agent 侧记录 + 售前人工回填</td></tr>
+    <tr><td>体验课转化率</td><td>点击到完成低价课下单的比例</td></tr>
+    <tr><td>登录引导成功率</td><td>引导登录后完成登录并回到原流程的比例</td></tr>
+    <tr><td>升单率</td><td>体验课学员购买正价课的比例</td></tr>
+    <tr><td><b>来源分层转化率差值</b></td><td>自然流量与售前引流两组人群的转化率对比，用于判断 Agent 对"无人服务流量"的真实增量价值</td></tr>
+    <tr><td>售前线索交付时效</td><td>从转人工到售前首次触达的时长，衡量人机衔接是否顺畅</td></tr>
+    <tr><td><b>归属判定覆盖率</b></td><td>成交订单中能明确判定"最近一次人工接触售前"的比例。<b>无法判定的部分（纯自然流量成交）需单独口径</b>，否则会成为归属争议的来源——这是业绩归属规则落地的护栏指标</td></tr>
+    <tr><td><b>推荐结果的课程线分布</b></td><td>推荐与线索按课程线的分布是否与用户需求结构一致。<b>推荐权重无需评审，本指标作为"运营透明度措施"保留</b>（建议每月向销售侧同步），用于说明推荐未发生系统性偏向，但不设评审流程</td></tr>
+    <tr><td><b>单课程线线索承载饱和度</b></td><td>各课程线售前实际承接量 / 承载上限，用于判断是否需要限流或兜底分配</td></tr>
+    <tr><td rowspan="5">质量护栏</td><td>答案准确率 / 幻觉率</td><td>人工抽检，建议每周抽样</td></tr>
+    <tr><td>人工接管率</td><td>过高说明知识库覆盖不足</td></tr>
+    <tr><td>售前团队使用率与认可度</td><td>衡量 Agent 是否真正成为售前的工具而非负担</td></tr>
+    <tr><td>重复打扰率</td><td>售前刚沟通过的学员又被 Agent 主动唤起，属体验负项</td></tr>
+    <tr><td>用户投诉率与负面反馈率</td><td>红线指标，需设阈值告警</td></tr>
+  </tbody>
+</table>
+
+<h2>11. 风险与合规提示</h2>
+<table>
+  <thead><tr><th>风险</th><th>说明</th><th>应对建议</th></tr></thead>
+  <tbody>
+    <tr><td><b>双入口冲突</b></td><td>官网已有"咨询"按钮，若再叠加 Agent 悬浮球，用户会不清楚该点哪个，或误以为功能重复</td><td><b>入口归一</b>：合并为一个入口，先由 Agent 承接，必要时再弹二维码（MVP 必做）</td></tr>
+    <tr><td><b>内部协作阻力</b></td><td>售前团队可能将 Agent 视为"抢单"工具，导致消极推广甚至绕过</td><td>立项阶段即明确人机分工与业绩归属规则；V1 提供售前辅助能力，让售前成为受益方而非对手</td></tr>
+    <tr><td><b>业绩归属判定口径</b></td><td>归属规则已明确为"归属最近一次人工接触的售前"，三方贡献争议基本解除。剩余风险在于<b>判定口径未细化</b>：多久算"最近"、跨渠道如何判定、<b>纯自然流量成交（无人工接触记录）归谁</b></td><td>由销售负责人补齐口径（时间窗、渠道范围、自然流量订单归属）；产品侧提供"最近接触人 + 时间 + 渠道"的完整记录（R19 / R27），并用"归属判定覆盖率"指标定期核对</td></tr>
+    <tr><td><b>线索分配公平性关注</b></td><td>Agent 推荐哪门课，线索就流向哪位售前，客观上具有分配作用。归属规则确认为"最近接触售前"，<b>已被售前接触的学员其业绩不受影响</b>，售前抵触动机显著下降；推荐权重亦无需评审，风险等级整体下调。剩余表现为对<b>增量自然流量线索</b>分配的关切，以及某课程线承接力不足时"推得越多、浪费越多"</td><td>推荐依据留痕（R25）供事后说明；每月向销售侧同步课程线线索分布（运营透明度措施，非评审）；按课程线设线索量上限，超出转兜底分配或降级呈现</td></tr>
+    <tr><td><b>映射失配</b></td><td>课程新增、售前离职或调整分工后，课程—售前映射未同步，导致弹错码或弹空码</td><td>映射做成可配置项（R24），明确维护责任人与更新时机；设置兜底码；上线前做全课程覆盖校验</td></tr>
+    <tr><td><b>承接渠道能力边界</b></td><td>售前承接渠道已升级为企业微信，好友上限与风控约束优于个人号、客户资产可在企业侧继承。<b>但企业微信的能力是有条件的</b>——若仅完成账号迁移、未启用活码与开放接口，则 R19 归因与 R23 上下文推送仍需按降级方案实现</td><td>就企业微信能力做一次边界确认（是否活码并带来源参数、客户联系 API 是否开放、是否开通会话存档、后台能否提供分渠道统计）；对同一售前的转人工保留频次控制；按课程线设线索量上限以防单点过载</td></tr>
+    <tr><td><b>课程正文以图片承载</b></td><td>详情接口的 <code>full_description</code> / <code>h5_description</code> 均为纯图片富文本（PC 端与 H5 端各 8 张图），<b>接口层没有可检索的课程正文文本</b>；而"这门课到底讲什么"恰恰是学员最高频的提问，也是推荐理由的主要素材来源</td><td>三条路径并行：① 复用 FDE 已具备的 OCR 能力（Qwen-VL 截图识文）批量转文本入库；② 请课程运营对 Top 20 课程补录文本版要点（最准确、可控）；③ 短期以结构化字段（<code>subtitle</code> / <code>course_features</code> / <code>tags</code> / <code>difficulty_level</code>）加售前语料先撑起知识库，图片正文以跳转深链方式引导用户自行查看</td></tr>
+    <tr><td><b>售前码与班主任码同源</b></td><td>实测样本中 <code>pre_sale_service_qrcode</code> 与 <code>tutor.qrcode</code> 指向<b>同一张图片文件</b>，说明该课程尚未为售前单独配置二维码，或当前直接复用了班主任码。这与"班主任付费后才可见"的既有认知存在张力——若付费前弹出的即是班主任码，需业务侧确认是否符合预期</td><td>核实该字段是否按课程独立配置；若确实复用，需明确售前阶段承载人身份与话术；上线前做全课程二维码覆盖与有效性校验（并入 R24）</td></tr>
+    <tr><td>话术口径冲突</td><td>Agent 与售前对同一课程给出不一致的回答，损害信任</td><td>建立统一话术库，Agent 与售前同源；价格、优惠、退费等敏感项一律以官方口径为准</td></tr>
+    <tr><td>重复触达</td><td>售前刚沟通完，学员进入官网又被 Agent 弹窗打扰</td><td>识别来源参数，对售前引流用户降低主动唤起频次与力度</td></tr>
+    <tr><td>转人工落空</td><td>弹了二维码但用户不扫，或扫码后非工作时段无人响应，形成"假承接"</td><td>弹码前明确告知响应时段；保证线索落库；避免把弹码当作问题已解决</td></tr>
+    <tr><td>内容版权</td><td>付费课程视频采用腾讯云 DRM 加密保护</td><td>Agent 严禁输出课程视频内容、逐字稿或任何可绕过付费的信息；知识库只使用详情页介绍级材料</td></tr>
+    <tr><td>信息幻觉</td><td>大模型可能编造课程信息、价格或证书效力</td><td>课程信息一律通过接口实时获取，不进入模型自由生成；推荐结果强校验</td></tr>
+    <tr><td>登录流失</td><td>强制登录导致用户在支付环节跳出</td><td>在对话早期即引导登录；登录跳转前后完整保留会话与推荐记录；已决策用户走短路径</td></tr>
+    <tr><td>承诺越权</td><td>Agent 不得承诺折扣、退费、包就业或证书效力</td><td>敏感意图白名单拦截，统一语气规范</td></tr>
+    <tr><td>未成年人</td><td>K12 场景涉及未成年人信息</td><td>本期建议不覆盖 K12 在线留资，或完成监护人同意流程后再开</td></tr>
+    <tr><td>体验干扰</td><td>主动弹出可能干扰浏览</td><td>设置频次上限，同一次会话内不重复弹出</td></tr>
+    <tr><td>内容未填齐</td><td>详情页 9 板块若部分课程内容为空，将影响知识库覆盖</td><td>上线前先盘点板块内容完整度，优先覆盖 Top 20 课程</td></tr>
+  </tbody>
+</table>
+
+<h2>12. 剩余待确认问题</h2>
+<p>以下问题尚待澄清，建议在 PRD 评审前完成。技术侧的未知已大幅收敛：<b>课程详情接口实测确认售前二维码即接口字段（见 3.4），技术可行性已确认</b>；<b>当前主要待办在内容侧——课程正文与 9 板块以图片承载，接口层无可检索文本</b>。三项组织规则（人机分工、业绩归属、推荐权重）已确认，相关规则类问题关闭；待明确项集中在<b>三处口径补齐</b>：企业微信能力边界、归属判定口径、课程接口数据口径。此外<b>部署层权限</b>虽非功能缺口，但决定接入路径能否成立，建议优先澄清；官网维护方为内部技术团队，重点在于内部排期与授权落地。</p>
+<ol>
+  <li><b>详情页内容可读性：</b>课程接口已实测（见 3.4）：<b>结构化字段可读</b>（价格、标签、难度、分类、卖点、报名状态、售前二维码）；<b>但课程正文与 9 板块内容以图片承载，接口层无文本</b>。<b>待明确：</b>① 是否存在章节 / 大纲、讲师详情、常见问题等<b>配套接口</b>？② 9 板块内容是否全部为图片？③ 若需文本化，采取 OCR 批量转换还是运营补录，由谁承担？</li>
+  <li><b>板块内容完整度：</b>是否所有付费课程都已填齐 9 个板块？哪些课程内容为空？</li>
+  <li><b>售前团队规模与分工：</b>售前人员共几位？日均沟通学员量多少？当前最主要的沟通卡点是什么？<b>分工结构可从现有课程—售前映射反推</b>（知道课程覆盖即可推知按课程线的分工），因此本项剩余缺口主要是<b>人数与产能</b>。</li>
+  <li><b>官网技术团队的协作窗口：</b>www.arborseek.com 由<b>内部技术团队</b>负责开发与部署，产品侧当前无源码属"未对接/未授权"而非"公司无源码"。三处授权可直接与该团队沟通、不跨组织，且该团队具备改源码能力，P2/P3 路径更可行。<b>待明确：该团队的联系窗口、迭代排期，以及脚本注入在其内部的优先级。</b></li>
+  <li><b>部署层权限与安全审查：</b>是否具备在 HTML 响应中注入脚本的权限（Nginx / CDN / 构建流程）？向生产环境注入第三方脚本需经过哪一层安全与合规评审、周期多长？该注入需求在内部技术团队的迭代排期中处于什么优先级？<b>CSP 一项已实测闭环：站点部署方式为 Nginx，响应头中未包含 <code>Content-Security-Policy</code>，也未部署标签管理器，当前注入不会被拦截；剩余问题仅为"后续是否有启用计划、能否预留来源白名单"。</b></li>
+  <li><b>售前语料可用性：</b>能否提供历史微信沟通记录（脱敏后）作为知识库与问诊脚本的素材？由谁授权与整理？</li>
+  <li><b>售前二维码字段的配置方式：</b>已实测确认<b>售前二维码即课程详情接口的 <code>pre_sale_service_qrcode</code> 字段</b>，无需另找映射数据源。<b>待明确：</b>① 该字段是否<b>按课程独立配置</b>（实测样本与 <code>tutor.qrcode</code> 指向同一图片，疑似复用班主任码）；② 能否在<b>后台维护</b>——课程新增或售前调整时由谁更新；③ 字段为空时前端现有的兜底逻辑是什么；④ 能否换成企业微信「联系我」活码并带来源参数。</li>
+  <li><b>课程接口的数据口径：</b>实测样本中发现三处需对齐：① <code>price_tiers</code> 阶梯价中"31–60 人 ¥89"高于"1–30 人 ¥69"，<b>单价随人数上升</b>，与常规团购口径相反；② <code>price</code> 为数字而 <code>original_price</code> 为字符串（<code>"199.00"</code>），<b>类型不一致</b>；③ <code>student_count</code> 为 0 而 <code>badge</code> 为 hot，报名人数可能未统计或未对外返回。<b>三项均会影响 Agent 的价格话术与推荐排序。</b></li>
+  <li><b>倒计时优惠的实际规则：</b>接口返回 <code>countdown</code>（<code>enabled: true</code>、<code>threshold_seconds: 2592000</code> 即 30 天、<code>target_timestamp</code> 为空）。需明确其业务含义——是"首次访问后 30 天内可享优惠价"，还是其他规则？<b>Agent 若引用倒计时营造紧迫感，必须与实际价格逻辑严格一致，不得虚构截止时间</b>，否则构成虚假促销。</li>
+  <li><b>同一课程是否对应多位售前：</b>若一门课由多人负责，弹码规则是什么（固定、轮询、按来源）？Agent 分流时需要遵循同一规则，否则会与现有分配习惯冲突。</li>
+  <li><b>企业微信的能力边界：</b>售前承接渠道<b>已升级为企业微信</b>，但能力边界仍需确认。<b>待明确：</b>① 是否使用可带来源参数的<b>「联系我」活码</b>（决定 R19 能否自动归因）；② 企业微信<b>客户联系 / 应用消息 API</b> 是否对本项目开放（决定 R23 能否程序化推送）；③ 是否开通<b>会话存档</b>（既支撑 R18 售前语料沉淀，也涉及对用户的合规告知）；④ 企微后台能否提供<b>分渠道的添加客户数与来源统计</b>。</li>
+  <li><b>业绩归属的判定口径：</b>归属规则已明确为<b>"归属最近一次人工接触的售前"</b>。<b>待明确：</b>① <b>时间窗</b>——多久内的接触算"最近"（7 天 / 30 天 / 不限）？② <b>跨渠道判定</b>——售前在微信接触、学员从其他渠道进入官网，是否同样认定？③ <b>纯自然流量成交（无任何人工接触记录）归谁</b>——这是规则的空缺处，需销售负责人补口径；④ 业绩核算由谁执行、以哪份报表为准。<b>口径未定前，R19 / R27 无法写验收标准。</b></li>
+  <li><b>非工作时段响应：</b>扫码加好友后由谁接待？有无自动回复或值班安排？夜间与周末通常多久响应？</li>
+  <li><b>现有咨询入口数据：</b>咨询按钮的点击量、扫码率、加好友后的转化情况——<b>这是目前唯一可能拿到的近似基线</b>，建议优先获取。</li>
+  <li><b>埋点与来源标识：</b>能否在官网埋点，并在链接上区分自然流量与售前引流？现有是否已有统计工具（如百度统计、GA）可复用？</li>
+  <li><b>AI 资源配额：</b><code>openai.arborseek.com</code> 是否为集团自建网关？可用模型、并发配额与成本预算是多少？</li>
+  <li><b>营销权限：</b>Agent 是否被授权发放优惠券或折扣？折扣上限是多少？（影响 P2 需求可行性）</li>
+  <li><b>知识库维护方：</b>课程介绍、师资、常见问题等内容由哪个团队负责提供与持续维护？</li>
+  <li><b>B2B 分流方式：</b>高校采购、企业合作类咨询转给谁？是否需要独立的留资表单？</li>
+  <li><b>各课程线的承接量上限：</b>每条课程线（每位售前）单日可承接多少条线索？超出后的规则是什么（排队、兜底分配、还是降级呈现）？<b>这是决定 Agent 是否需要对热门课程设置推荐限流的关键输入。</b></li>
+  <li><b>推荐权重的评审机制：</b>已明确推荐权重<b>暂不需要评审机制</b>，因此不设评审流程与例会。仅保留推荐依据留痕（R25）与课程线线索分布月度同步作为运营透明度措施。若后续售前侧提出异议，再评估是否升级为评审机制。</li>
+  <li><b>FDE 复用方式：</b>是否确定以 FDE「统一知识助手」作为技术起点（推荐策略 B：搬内核、换外壳）？由哪个团队承担——官网前端、现有后台团队，还是原 FDE 开发者？</li>
+  <li><b>部署形态与用户体系对接：</b>Agent 作为独立服务部署，还是并入 <code>arboradmin.saikr.com</code> 后台？官网登录态如何对接（SSO / 透传 token / 独立登录）？域名与跨域方案如何定？</li>
+  <li><b>会话内容落库的合规口径：</b>为支撑线索归因（R19）与转人工摘要（R23），需保留会话内容；这与既有隐私设计（不记录问题全文）相反，需明确允许范围、保留期限与对用户的告知方式。</li>
+</ol>
+
+<h2>13. 下一步建议</h2>
+<ol>
+  <li><b>把已落地的组织规则写成可执行口径（第 2.5 节）。</b>人机分工（协同 C + 增强 B）与业绩归属（归属最近一次人工接触的售前）均已确认，下一步需与销售负责人补齐<b>判定口径</b>：时间窗、跨渠道范围、纯自然流量订单归属。口径明确前的其余设计工作不受影响，但 R19 / R27 的验收标准需待口径确定后补写。</li>
+  <li><b>把"入口归一"作为 MVP 第一条需求落地。</b>不合并入口，Agent 一上线就会与现有"咨询"按钮打架，体验和口碑都会受损。</li>
+  <li><b>官网维护归属已确认为内部技术团队（见 3.3 节），下一步直接与该团队谈"三处授权"与排期</b>：<b>能否获得部署层脚本注入权限、后续是否有启用 CSP 的计划（当前未配置，已实测）、注入在其内部迭代中的优先级</b>。<b>需强调：这一步不构成其他工作的阻塞</b>——Agent 可以先独立部署，优先服务售前内部，待授权到位后再沿 P1 → P2 → P3 逐步推向前台。</li>
+  <li><b>把技术诉求从"要代码"改为"要三处授权"。</b>即部署层注入权限、现有"咨询"弹窗组件位置、课程—售前映射读取方式（见 3.3 节）。<b>三处授权在跨团队协作中的可达成性，远高于源码移交。</b></li>
+  <li><b>把"课程内容文本化"列入 MVP 前置任务（见 3.4 节）。</b>接口实测已确认售前二维码可直读、结构化字段齐备，<b>真正的待办转移到"课程正文与 9 板块内容全部是图片"</b>。建议双线推进：对 Top 20 课程请课程运营补录文本版要点（最准确）；其余课程用 OCR 批量转文本（FDE 已有该能力）。<b>此事可与技术开发并行、不占排期，但直接决定知识库的覆盖质量与推荐理由的可信度。</b></li>
+  <li><b>确定 FDE「统一知识助手」的复用边界（第 3.2 节）。</b>建议采用"搬内核、换外壳"（策略 B），并优先落一个只含<b>"知识库问答 + 未命中转人工"</b>的最小版本，用于在匿名自然流量下验证自助解决率。该版本不依赖问诊与推荐方案定稿，可与设计并行推进，也正好补上"无基线数据"这一短板。</li>
+  <li>继续澄清第 12 节其余各项（<b>售前码字段的配置方式与兜底逻辑</b>、<b>课程接口的数据口径与倒计时规则</b>、配套接口是否存在、售前人数与产能、语料可用性、<b>企业微信的活码与 API 权限边界</b>、现有咨询入口数据），这些决定 MVP 能否按期落地。</li>
+  <li><b>同步启动售前语料整理</b>（低成本、高收益）。将售前历史沟通中的高频问题与顾虑整理成第一批知识库条目，可与技术开发并行推进。</li>
+  <li><b>组织规则已落地，可进入 PRD 撰写（阶段二）。</b>人机分工、业绩归属、推荐权重三项确认后，方案的最大不确定性已由"组织能否接受"转为"能否按期实现"。建议先起草已确定部分——入口归一、问诊轮次与画像字段、登录态保持、知识库组织方式、埋点体系、EARS 条目；<b>推荐权重与归属口径两处留占位待补</b>，不阻塞其余内容。</li>
+  <li>据此产出 PRD，按 EARS 原则补充完整需求条目与验收标准；指标部分先写"采集口径"，目标值待分层基线出来后补齐。</li>
+  <li>建议先做 2 周小范围验证：在课程详情页上线最小可用版本，重点观察自然流量组的问诊完成率、推荐点击率与自助解决率，再决定是否全量铺开。</li>
+  <li>将本报告与后续 PRD 上传至项目资料库，形成团队统一上下文。</li>
+  <li>创建评审事项，邀请技术负责人、设计同学、测试同学参与，<b>并将销售负责人与售前团队代表加为关注人</b>——缺少销售侧的认可，这个项目很难在内部推得动。</li>
+</ol>
+
+<footer>
+  本报告信息来源于 www.arborseek.com 公开页面（首页、产教融合页、课程列表页、联系我们页）、集团公开资料、站点前端产物分析、公司既有项目 <code>D:\FDE</code>「统一知识助手」的文档与模块结构（README、系统架构、混合检索、进阶资料推荐、上线差距、backend/frontend 目录结构），以及业务方于 2026-09-16 的确认反馈（在线支付与登录要求、课程详情页板块结构、班主任企微为付费后可见、现有售前人员微信触达模式、官网咨询按钮弹出销售微信二维码且按课程区分、基线数据缺失、推荐范围限定、<b>当前无可用的官网前端源码</b>、<b>官网由内部技术团队维护</b>、<b>售前承接渠道形态（企业微信）</b>、<b>人机分工定位为协同 + 增强</b>、<b>业绩归属以最近一次人工接触的售前为准</b>、<b>推荐权重暂不设评审机制</b>）、<b>课程详情接口的实测返回样本</b>）。<br>
+  行业数据为第三方公开案例，仅作方向性参考。涉及排期、资源、上线范围与业绩归属等决策事项，需与对应负责人确认。
+</footer>
+
+</div>
+</body>
+</html>

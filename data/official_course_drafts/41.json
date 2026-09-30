@@ -1,0 +1,28 @@
+{
+  "course_id": "41",
+  "review_status": "draft",
+  "collected_at": "2026-09-29T09:05:20.343270+00:00",
+  "source_url": "https://www.arborseek.com/course/41",
+  "api_url": "https://arboradmin.saikr.com/miniapp/course/detail/41",
+  "title": "大模型工作坊实战课程",
+  "subtitle": "零基础入门大模型，轻松掌握AI核心应用技能",
+  "description": "",
+  "course_features": [
+    {
+      "title": "录播课程",
+      "content": "随时学习/支持回看"
+    },
+    {
+      "title": "大模型入门",
+      "content": "零基础掌握/核心概念与应用"
+    },
+    {
+      "title": "实操演练",
+      "content": "配套代码示例/动手实践环节"
+    }
+  ],
+  "full_description_text": "",
+  "full_description_image_count": 8,
+  "h5_description_text": "",
+  "h5_description_image_count": 9
+}

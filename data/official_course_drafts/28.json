@@ -1,0 +1,28 @@
+{
+  "course_id": "28",
+  "review_status": "draft",
+  "collected_at": "2026-09-29T09:05:19.394606+00:00",
+  "source_url": "https://www.arborseek.com/course/28",
+  "api_url": "https://arboradmin.saikr.com/miniapp/course/detail/28",
+  "title": "具身智能机器狗巡检工作坊",
+  "subtitle": "主办单位：中国图象图形学会",
+  "description": "",
+  "course_features": [
+    {
+      "title": "学习时长",
+      "content": "1天/高强度学习实训"
+    },
+    {
+      "title": "线下课程",
+      "content": "工程师1V1实战指导"
+    },
+    {
+      "title": "证书认证",
+      "content": "完成全流程学习并考核合格者颁发结业证书"
+    }
+  ],
+  "full_description_text": "",
+  "full_description_image_count": 6,
+  "h5_description_text": "",
+  "h5_description_image_count": 4
+}

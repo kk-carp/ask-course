@@ -1,0 +1,32 @@
+{
+  "course_id": "13",
+  "review_status": "draft",
+  "collected_at": "2026-09-29T09:05:17.254297+00:00",
+  "source_url": "https://www.arborseek.com/course/13",
+  "api_url": "https://arboradmin.saikr.com/miniapp/course/detail/13",
+  "title": "机器人操作员实操班",
+  "subtitle": "实现“入职即上手“的技能目标",
+  "description": "",
+  "course_features": [
+    {
+      "title": "实操教学",
+      "content": "真实机器人操作演示/手把手步骤讲解"
+    },
+    {
+      "title": "配套资料",
+      "content": "操作手册/安全规范指南"
+    },
+    {
+      "title": "安全规范",
+      "content": "工业机器人安全操作/风险防范要点"
+    },
+    {
+      "title": "技能入门",
+      "content": "零基础可学/掌握基础操作技能"
+    }
+  ],
+  "full_description_text": "",
+  "full_description_image_count": 2,
+  "h5_description_text": "",
+  "h5_description_image_count": 2
+}

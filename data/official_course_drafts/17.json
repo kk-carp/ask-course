@@ -1,0 +1,28 @@
+{
+  "course_id": "17",
+  "review_status": "draft",
+  "collected_at": "2026-09-29T09:05:17.559843+00:00",
+  "source_url": "https://www.arborseek.com/course/17",
+  "api_url": "https://arboradmin.saikr.com/miniapp/course/detail/17",
+  "title": "机器人运动控制：避障绕桩理论与实践",
+  "subtitle": "ROS/Gazebo仿真课助力机器人竞赛实操高效入门",
+  "description": "",
+  "course_features": [
+    {
+      "title": "学习时长",
+      "content": "3周/建议每周6个小时"
+    },
+    {
+      "title": "答疑服务",
+      "content": "专属微信答疑群"
+    },
+    {
+      "title": "课程有效期",
+      "content": "1年有效期，温故知新"
+    }
+  ],
+  "full_description_text": "",
+  "full_description_image_count": 10,
+  "h5_description_text": "",
+  "h5_description_image_count": 10
+}

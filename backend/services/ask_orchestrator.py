@@ -1,0 +1,503 @@
+"""售前一轮问答编排：意图 → 问诊门闸 → 短路 → 公开信息 → RAG → 转人工。
+
+目标优先级（整条主链遵守）：
+1. 商业敏感 / 找顾问 → 转人工
+2. 付款且已确认课 → 详情/购买引导
+3. 有方向且能命中可推荐课 → 直接列课（不进问诊）
+4. 无方向 / 命中为空 / 就业类 → 游客问诊
+5. 已选课的公开事实 → official_course_drafts；不足则依据不足，本轮不 RAG
+6. 其余 → RAG；有 related_courses 不转人工
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import re
+from dataclasses import dataclass, replace
+from uuid import UUID
+
+from fastapi import HTTPException
+
+from backend import db
+from backend.config import settings
+from backend.errors import ServiceUnavailableError, UpstreamServiceError
+from backend.models import VisitorConsultation
+from backend.schemas import AskRequest, AskResponse, OwnerInfo, RelatedCourse
+from backend.services.approved_courses import (
+    get_approved_course,
+    load_recommendable_courses,
+)
+from backend.services.consultation_service import (
+    FIELDS,
+    QUESTIONS,
+    dialogue_history,
+    get_or_create_dialogue,
+    load_owned,
+    present,
+    remember_turn,
+)
+from backend.services.conversation_service import ConversationNotFoundError
+from backend.services.course_catalog_service import OfficialCourse, search_related_courses
+from backend.services.handoff_service import resolve_handoff
+from backend.services.intent_router import (
+    Intent,
+    classify_intent,
+    handle_routed_turn,
+    recommend_has_direction,
+    should_enter_guest_consultation,
+)
+from backend.services.profile_extraction import extract_profile_updates, looks_like_profile
+from backend.services.public_course_info import (
+    ANSWER_PUBLIC_INSUFFICIENT,
+    answer_public_question,
+    public_fact_topic,
+)
+from backend.services.qa_service import AskResult, answer_question
+
+_log = logging.getLogger("backend.ask_orchestrator")
+
+
+@dataclass(frozen=True)
+class AskIdentity:
+    allowed_spaces: list[str]
+    user_id: str | None
+    user_role: str | None
+    visitor_id: str | None
+
+
+def related_course_card(
+    course: OfficialCourse,
+    *,
+    purchase_url: str | None = None,
+) -> RelatedCourse:
+    """官网详情链接与封面；购买链仅审核通过后才填。"""
+    return RelatedCourse(
+        id=course.course_id,
+        title=course.title,
+        description=course.description or None,
+        purchase_url=purchase_url,
+        source_url=f"https://www.arborseek.com/course/{course.course_id}",
+        cover_url=course.cover_url,
+    )
+
+
+def to_response(
+    result: AskResult,
+    related: list[RelatedCourse] | None = None,
+    *,
+    intent: str | None = None,
+) -> AskResponse:
+    return AskResponse(
+        answer=result.answer,
+        hit=result.hit,
+        sources=result.sources,
+        conversation_id=result.conversation_id,
+        owner=result.owner,
+        related_courses=related or [],
+        intent=intent,
+        error_type=result.error_type,
+        llm_called=result.llm_called,
+        prompt_tokens=result.prompt_tokens,
+        completion_tokens=result.completion_tokens,
+    )
+
+
+def course_context_for_content(
+    question: str, course_id: str | None
+) -> tuple[str | None, list[RelatedCourse]]:
+    """内容问答：已指定课程则沿用；未指定时用可推荐列表辅助。"""
+    explicit = (course_id or "").strip()
+    if explicit:
+        return explicit, []
+    matches = search_related_courses(question, courses=load_recommendable_courses())
+    related = [related_course_card(item) for item in matches]
+    resolved = matches[0].course_id if matches else None
+    return resolved, related
+
+
+def apply_handoff(
+    result: AskResult,
+    *,
+    question: str,
+    course_id: str | None,
+    related_courses: list[RelatedCourse] | None = None,
+) -> AskResult:
+    """未命中时补转人工；已匹配课程则不转。不落工单。"""
+    if result.hit:
+        return result
+    if related_courses:
+        return result
+
+    handoff = resolve_handoff(question=question, course_id=course_id)
+    answer = result.answer
+    if handoff.owner.configured and settings.handoff_miss_answer:
+        answer = settings.handoff_miss_answer
+
+    return replace(result, answer=answer, owner=handoff.owner)
+
+
+def _prepare_guest_dialogue(
+    visitor_id: str, payload: AskRequest, *, intent: Intent
+) -> tuple[str, list[tuple[str, str]], dict | None, str | None]:
+    db.init_engine()
+    if db.SessionLocal is None:
+        raise ServiceUnavailableError("数据库会话未初始化")
+    with db.SessionLocal() as session:
+        # 无方向开场（默认问题）一律新开问诊：访客 cookie 跨重启仍在，
+        # 若复用旧 VisitorConsultation 会带着旧 goal 直接荐课。
+        fresh_undirected = (
+            intent is Intent.recommend and not recommend_has_direction(payload.question)
+        )
+        if fresh_undirected:
+            row = VisitorConsultation(
+                visitor_id=visitor_id,
+                course_id=payload.course_id,
+                profile_json="{}",
+                history_json="[]",
+            )
+            session.add(row)
+            session.flush()
+        else:
+            try:
+                row = get_or_create_dialogue(
+                    session,
+                    visitor_id,
+                    payload.course_id,
+                    str(payload.conversation_id) if payload.conversation_id else None,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+        history = dialogue_history(row)
+        profile = json.loads(row.profile_json)
+        pending = profile.get("_pending_field")
+        if not pending and history and history[-1][0] == "assistant":
+            pending = next(
+                (
+                    field
+                    for field, question in QUESTIONS.items()
+                    if history[-1][1].endswith(question)
+                ),
+                None,
+            )
+        selection = should_enter_guest_consultation(
+            intent,
+            payload.question,
+            pending_field=pending,
+            looks_like_profile_reply=looks_like_profile(payload.question, pending),
+        )
+        preview = None
+        if selection:
+            updates = extract_profile_updates(payload.question, profile, pending)
+            # 无方向开场不应把开场句写成 goal。
+            if fresh_undirected:
+                updates.pop("goal", None)
+                for key in FIELDS:
+                    profile.pop(key, None)
+            profile.update(updates)
+            row.profile_json = json.dumps(profile, ensure_ascii=False)
+            preview = present(session, row)
+            preview["updates"] = updates
+            profile["_pending_field"] = preview["next_field"]
+            recommendations = preview["recommendations"]
+            profile["_selected_course_id"] = (
+                recommendations[0]["id"] if len(recommendations) == 1 else None
+            )
+        else:
+            # 课程事实 / 有方向列课等会离开问诊槽位，避免下一轮误吃短答。
+            profile.pop("_pending_field", None)
+        row.profile_json = json.dumps(profile, ensure_ascii=False)
+        session.commit()
+        return (
+            row.id,
+            history,
+            preview,
+            profile.get("_selected_course_id") or payload.course_id,
+        )
+
+
+def _remember_guest_dialogue(
+    visitor_id: str, dialogue_id: str, question: str, answer: str
+) -> None:
+    if db.SessionLocal is None:
+        return
+    with db.SessionLocal() as session:
+        row = load_owned(session, dialogue_id, visitor_id)
+        if row is not None:
+            remember_turn(session, row, question, answer)
+
+
+def _bind_selected_course(
+    visitor_id: str, dialogue_id: str, course_id: str | None
+) -> None:
+    """把本轮唯一匹配的课写入游客会话，供后续「这个课 / 优惠 / 付款」沿用。"""
+    key = (course_id or "").strip()
+    if not key or db.SessionLocal is None:
+        return
+    with db.SessionLocal() as session:
+        row = load_owned(session, dialogue_id, visitor_id)
+        if row is None:
+            return
+        profile = json.loads(row.profile_json or "{}")
+        if profile.get("_selected_course_id") == key:
+            return
+        profile["_selected_course_id"] = key
+        row.profile_json = json.dumps(profile, ensure_ascii=False)
+        session.commit()
+
+
+def _course_id_to_bind(
+    *,
+    related: list[RelatedCourse] | tuple[RelatedCourse, ...],
+    routed_course_id: str | None = None,
+    resolved_course_id: str | None = None,
+) -> str | None:
+    """仅在唯一课卡或显式解析出单课时绑定，避免多候选误锁。"""
+    if len(related) == 1:
+        return related[0].id
+    explicit = (routed_course_id or resolved_course_id or "").strip()
+    return explicit or None
+
+
+def _selection_response(preview: dict) -> tuple[AskResult, list[RelatedCourse]]:
+    updates = preview.get("updates", {})
+    acknowledgement = ""
+    if "hardware" in updates:
+        acknowledgement = {
+            "no": "你目前没有练习硬件。",
+            "yes": "你已有练习硬件。",
+            "unknown": "硬件条件暂不确定。",
+        }[updates["hardware"]]
+    elif "basis" in updates:
+        acknowledgement = {
+            "none": "你目前是零基础。",
+            "basic": "你已有一些编程或机器人基础。",
+            "experienced": "你已有项目实践经验。",
+        }[updates["basis"]]
+    if preview["status"] == "collecting":
+        return (
+            AskResult(
+                answer=f"{acknowledgement}{preview['question']}",
+                hit=False,
+                sources=[],
+            ),
+            [],
+        )
+    if preview["status"] == "recommended":
+        related = [
+            RelatedCourse(
+                id=item["id"],
+                title=item["title"],
+                purchase_url=item.get("purchase_url"),
+                source_url=item["source_url"],
+            )
+            for item in preview["recommendations"]
+        ]
+        reasons = "\n".join(
+            f"{item['title']}：{item['reason']}" for item in preview["recommendations"]
+        )
+        followup = (
+            f"如果方便，也可以补充：{preview['question']}"
+            if preview["question"]
+            else "你可以继续问课程内容、学习方式，或查看官网详情。"
+        )
+        return (
+            AskResult(
+                answer=f"{acknowledgement}{reasons}\n\n{followup}",
+                hit=False,
+                sources=[],
+            ),
+            related,
+        )
+    if preview["status"] == "no_match":
+        return (
+            AskResult(
+                answer=(
+                    "目前可推荐课程里没有找到符合这个目标或已知学习条件的课程。"
+                    "你也可以告诉我希望完成的具体任务，我再帮你缩小范围。"
+                ),
+                hit=False,
+                sources=[],
+            ),
+            [],
+        )
+    owner = preview.get("owner")
+    return (
+        AskResult(
+            answer="目前没有足够依据推荐课程，建议请课程顾问进一步确认。",
+            hit=False,
+            sources=[],
+            owner=OwnerInfo.model_validate(owner) if owner else None,
+        ),
+        [],
+    )
+
+
+def _enrich_related(related: list[RelatedCourse]) -> list[RelatedCourse]:
+    """补全详情链接、审核购买页与封面。"""
+    enriched: list[RelatedCourse] = []
+    for item in related[:3]:
+        approved = get_approved_course(item.id)
+        official = next(
+            (
+                course
+                for course in load_recommendable_courses()
+                if course.course_id == item.id
+            ),
+            None,
+        )
+        enriched.append(
+            RelatedCourse(
+                id=item.id,
+                title=item.title,
+                description=item.description
+                or (official.description if official else None),
+                purchase_url=item.purchase_url
+                or (approved.purchase_url if approved else None),
+                source_url=item.source_url
+                or f"https://www.arborseek.com/course/{item.id}",
+                cover_url=item.cover_url
+                or (official.cover_url if official else None),
+            )
+        )
+    return enriched
+
+
+def run_ask_turn(payload: AskRequest, identity: AskIdentity) -> AskResponse:
+    """执行一轮问答；调用方负责限流、pilot 与身份解析。"""
+    allowed_spaces = identity.allowed_spaces
+    user_id = identity.user_id
+    user_role = identity.user_role
+    visitor_id = identity.visitor_id
+
+    intent = classify_intent(payload.question)
+    dialogue_id: str | None = None
+    visitor_history: list[tuple[str, str]] = []
+    dialogue_course_id = payload.course_id
+
+    if user_id is None and visitor_id:
+        try:
+            dialogue_id, visitor_history, preview, dialogue_course_id = (
+                _prepare_guest_dialogue(visitor_id, payload, intent=intent)
+            )
+        except ServiceUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        if preview is not None:
+            result, related = _selection_response(preview)
+            _remember_guest_dialogue(
+                visitor_id, dialogue_id, payload.question, result.answer
+            )
+            bind_id = _course_id_to_bind(related=related)
+            if bind_id:
+                _bind_selected_course(visitor_id, dialogue_id, bind_id)
+            return to_response(
+                replace(result, conversation_id=UUID(dialogue_id)),
+                _enrich_related(related),
+                intent=Intent.recommend.value,
+            )
+
+    routed = handle_routed_turn(payload.question, course_id=dialogue_course_id)
+    if routed.handled:
+        _log.info("ask short-circuit intent=%s", routed.intent.value)
+        result = routed.result
+        related = list(routed.related_courses)
+        if dialogue_id and visitor_id:
+            _remember_guest_dialogue(
+                visitor_id, dialogue_id, payload.question, result.answer
+            )
+            bind_id = _course_id_to_bind(
+                related=related, routed_course_id=routed.course_id
+            )
+            # 推荐列课唯一命中时写入会话；付款/顾问短路沿用已绑定课。
+            if routed.intent is Intent.recommend and bind_id:
+                _bind_selected_course(visitor_id, dialogue_id, bind_id)
+            result = replace(result, conversation_id=UUID(dialogue_id))
+        return to_response(
+            result,
+            _enrich_related(related),
+            intent=routed.intent.value,
+        )
+
+    course_id, related = course_context_for_content(
+        payload.question, dialogue_course_id
+    )
+    if (
+        dialogue_id
+        and visitor_id
+        and course_id
+        and not dialogue_course_id
+        and re.search(r"这门课|这个课|该课", payload.question or "")
+    ):
+        _bind_selected_course(visitor_id, dialogue_id, course_id)
+        dialogue_course_id = course_id
+
+    official = next(
+        (
+            item
+            for item in load_recommendable_courses()
+            if item.course_id == course_id
+        ),
+        None,
+    )
+    if official is None and course_id:
+        from backend.services.course_catalog_service import get_course_by_id
+
+        official = get_course_by_id(course_id)
+
+    topic = public_fact_topic(payload.question)
+    if official and topic:
+        public_answer = answer_public_question(payload.question, official)
+        answered = public_answer is not None
+        result = AskResult(
+            answer=public_answer or ANSWER_PUBLIC_INSUFFICIENT,
+            hit=answered,
+            sources=[],
+        )
+        card = [related_course_card(official)]
+        if dialogue_id and visitor_id:
+            _remember_guest_dialogue(
+                visitor_id, dialogue_id, payload.question, result.answer
+            )
+            _bind_selected_course(visitor_id, dialogue_id, official.course_id)
+            result = replace(result, conversation_id=UUID(dialogue_id))
+        return to_response(result, _enrich_related(card), intent="course_info")
+
+    try:
+        result = answer_question(
+            allowed_spaces=allowed_spaces,
+            question=payload.question,
+            user_id=user_id,
+            user_role=user_role,
+            conversation_id=payload.conversation_id if user_id is not None else None,
+            course_id=course_id,
+            visitor_history=visitor_history if user_id is None else None,
+        )
+        result = apply_handoff(
+            result,
+            question=payload.question,
+            course_id=course_id,
+            related_courses=related,
+        )
+    except HTTPException:
+        raise
+    except ConversationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ServiceUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except UpstreamServiceError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="问答处理失败") from exc
+
+    if dialogue_id and visitor_id:
+        _remember_guest_dialogue(
+            visitor_id, dialogue_id, payload.question, result.answer
+        )
+        if course_id and len(related) <= 1:
+            _bind_selected_course(visitor_id, dialogue_id, course_id)
+        result = replace(result, conversation_id=UUID(dialogue_id))
+    return to_response(
+        result, _enrich_related(related), intent=Intent.content.value
+    )

@@ -1,0 +1,32 @@
+{
+  "course_id": "18",
+  "review_status": "draft",
+  "collected_at": "2026-09-29T09:05:17.975043+00:00",
+  "source_url": "https://www.arborseek.com/course/18",
+  "api_url": "https://arboradmin.saikr.com/miniapp/course/detail/18",
+  "title": "机器人仿真抓取基础与实践",
+  "subtitle": "从运动学建模到抓取控制，掌握机器人操作核心技能",
+  "description": "",
+  "course_features": [
+    {
+      "title": "学习时长",
+      "content": "6周/建议每周至少6小时"
+    },
+    {
+      "title": "答疑服务",
+      "content": "专属微信答疑群/讲师助教均参与"
+    },
+    {
+      "title": "作业批改",
+      "content": "课程配有作业/助教1V1批改"
+    },
+    {
+      "title": "课程有效期",
+      "content": "1年/告别拖延，温故知新"
+    }
+  ],
+  "full_description_text": "",
+  "full_description_image_count": 10,
+  "h5_description_text": "",
+  "h5_description_image_count": 10
+}

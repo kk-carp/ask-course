@@ -1,0 +1,28 @@
+{
+  "course_id": "11",
+  "review_status": "draft",
+  "collected_at": "2026-09-29T09:05:16.975612+00:00",
+  "source_url": "https://www.arborseek.com/course/11",
+  "api_url": "https://arboradmin.saikr.com/miniapp/course/detail/11",
+  "title": "【实战|就业】机器狗研发实战营",
+  "subtitle": "兼顾实用操作与深度技术，满足多场景需求",
+  "description": "兼顾实用操作与深度技术，满足多场景需求",
+  "course_features": [
+    {
+      "title": "学习时长",
+      "content": "6周/建议每周8个小时"
+    },
+    {
+      "title": "答疑服务",
+      "content": "专属微信答疑群"
+    },
+    {
+      "title": "课程有效期",
+      "content": "一年/告别拖延，温故知新"
+    }
+  ],
+  "full_description_text": "",
+  "full_description_image_count": 9,
+  "h5_description_text": "",
+  "h5_description_image_count": 9
+}

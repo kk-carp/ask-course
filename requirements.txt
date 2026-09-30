@@ -1,0 +1,36 @@
+# ============================================================
+# P0 依赖：与统一知识助手（FDE）保持一致，仅去掉 P0 用不到的部分
+# ============================================================
+
+# --- Web 框架与鉴权 ---
+fastapi>=0.115
+uvicorn[standard]>=0.32
+itsdangerous>=2.2
+bcrypt>=4.2
+
+# --- 数据库与向量 ---
+sqlalchemy>=2.0
+psycopg[binary]>=3.2
+pgvector>=0.3
+
+# --- 配置与请求 ---
+pydantic-settings>=2.6
+python-multipart>=0.0.12
+
+# --- 文档解析（课程内容入库） ---
+python-docx>=1.1
+python-pptx>=1.0
+pypdf>=5.0
+
+# --- 检索内核：向量 + 重排 + 中文分词 ---
+sentence-transformers>=3.0
+jieba>=0.42
+
+# --- 对话模型（OpenAI 兼容；P0 指向 openai.arborseek.com 网关） ---
+openai>=1.50
+httpx>=0.27
+
+# --- 开发与自检 ---
+pytest>=8.3
+ruff>=0.7
+

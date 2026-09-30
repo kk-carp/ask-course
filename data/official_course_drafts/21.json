@@ -1,0 +1,32 @@
+{
+  "course_id": "21",
+  "review_status": "draft",
+  "collected_at": "2026-09-29T09:05:18.700828+00:00",
+  "source_url": "https://www.arborseek.com/course/21",
+  "api_url": "https://arboradmin.saikr.com/miniapp/course/detail/21",
+  "title": "机器人强化学习从理论到实践",
+  "subtitle": "全流程实战导向+硬核技术落地",
+  "description": "",
+  "course_features": [
+    {
+      "title": "学习时长",
+      "content": "8 周 / 每日碎片化轻松学"
+    },
+    {
+      "title": "任务辅导",
+      "content": "每周 5 天 / 专属助教全程陪伴"
+    },
+    {
+      "title": "技能目标",
+      "content": "从 0 到 1 / 吃透机器人强化学习全栈"
+    },
+    {
+      "title": "核心收获",
+      "content": "理论 + 实践 / 高效掌握机器人学习核心能力"
+    }
+  ],
+  "full_description_text": "",
+  "full_description_image_count": 10,
+  "h5_description_text": "",
+  "h5_description_image_count": 9
+}

@@ -1,0 +1,15 @@
+{
+  "course_id": "12",
+  "review_status": "draft",
+  "collected_at": "2026-09-29T09:05:17.105958+00:00",
+  "source_url": "https://www.arborseek.com/course/12",
+  "api_url": "https://arboradmin.saikr.com/miniapp/course/detail/12",
+  "title": "机器人操作系统之认识ROS",
+  "subtitle": "概述ROS历程及发展动态",
+  "description": "",
+  "course_features": [],
+  "full_description_text": "",
+  "full_description_image_count": 1,
+  "h5_description_text": "",
+  "h5_description_image_count": 1
+}

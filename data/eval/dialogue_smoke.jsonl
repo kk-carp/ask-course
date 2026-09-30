@@ -1,0 +1,1 @@
+{"id":"ros_employment_clarification","turns":[{"question":"学过ros，想就业","intent":"recommend","contains":"通过课程完成什么","no_handoff":true},{"question":"想做机器人巡检","intent":"recommend","contains":"硬件","no_handoff":true}]}

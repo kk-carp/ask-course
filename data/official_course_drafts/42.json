@@ -1,0 +1,32 @@
+{
+  "course_id": "42",
+  "review_status": "draft",
+  "collected_at": "2026-09-29T09:05:20.480722+00:00",
+  "source_url": "https://www.arborseek.com/course/42",
+  "api_url": "https://arboradmin.saikr.com/miniapp/course/detail/42",
+  "title": "高校大学生AI大模型企业实战训练营",
+  "subtitle": "零基础入门AI智能体开发，快速掌握应用构建核心技能",
+  "description": "一个面向大学生的 AI 大模型实战训练营。数周真实项目、企业导师带练、可发实训证明、可申请国家级协会认证——把“我会 AI”变成“我做过 AI”，为保研、留学、就业提供实打实的背书。",
+  "course_features": [
+    {
+      "title": "录播课程",
+      "content": "随时学习/支持回看"
+    },
+    {
+      "title": "实战项目",
+      "content": "动手开发AI智能体/覆盖主流框架"
+    },
+    {
+      "title": "零基础入门",
+      "content": "无需编程经验/从原理到应用"
+    },
+    {
+      "title": "云端环境",
+      "content": "免配置开发环境/一键运行示例代码"
+    }
+  ],
+  "full_description_text": "",
+  "full_description_image_count": 8,
+  "h5_description_text": "",
+  "h5_description_image_count": 8
+}

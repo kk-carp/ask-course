@@ -1,0 +1,4 @@
+{"id":"real-course-audience","topic":"audience","question":"这门课适合什么人？","course_id":"replace-with-real-course-id","expected_hit":true,"require_sources":true,"forbidden_phrases":["保证就业","百分百"]}
+{"id":"real-course-outline","topic":"outline","question":"这门课主要学哪些内容？","course_id":"replace-with-real-course-id","expected_hit":true,"require_sources":true}
+{"id":"real-course-schedule","topic":"schedule","question":"每周需要投入多少时间？","course_id":"replace-with-real-course-id","expected_hit":true,"require_sources":true}
+{"id":"real-course-certificate","topic":"certificate","question":"完成课程后有证书吗？","course_id":"replace-with-real-course-id","expected_hit":true,"require_sources":true,"forbidden_phrases":["国家认证","保证拿证"]}

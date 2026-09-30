@@ -1,0 +1,32 @@
+{
+  "course_id": "27",
+  "review_status": "draft",
+  "collected_at": "2026-09-29T09:05:19.259695+00:00",
+  "source_url": "https://www.arborseek.com/course/27",
+  "api_url": "https://arboradmin.saikr.com/miniapp/course/detail/27",
+  "title": "工业级多模态 Agent 与 VLA 智能体实战",
+  "subtitle": "多模态感知、决策与执行系统深度开发",
+  "description": "",
+  "course_features": [
+    {
+      "title": "学习时长",
+      "content": "8 周 / 建议每周 6 小时"
+    },
+    {
+      "title": "实战项目",
+      "content": "工业级多模态 Agent 完整项目"
+    },
+    {
+      "title": "技术体系",
+      "content": "从 VLA 基础到部署上线全栈覆盖"
+    },
+    {
+      "title": "学习服务",
+      "content": "配套源码 + 课件 + 答疑 + 环境配置指导"
+    }
+  ],
+  "full_description_text": "",
+  "full_description_image_count": 8,
+  "h5_description_text": "",
+  "h5_description_image_count": 7
+}

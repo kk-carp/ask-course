@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+cookies.txt
+.venv/
+.uv-cache/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+*.log
+data/uploads/
+data/index/
+*.sqlite*
+*.db
+.agents/
+.codex/

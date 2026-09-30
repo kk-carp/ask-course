@@ -1,0 +1,15 @@
+{
+  "course_id": "99",
+  "review_status": "draft",
+  "collected_at": "2026-09-29T09:05:21.301835+00:00",
+  "source_url": "https://www.arborseek.com/course/99",
+  "api_url": "https://arboradmin.saikr.com/miniapp/course/detail/99",
+  "title": "智能机械臂抓取与操作实训营",
+  "subtitle": "零基础入门智能机械臂抓取与操作实战训练",
+  "description": "面向大学生与机器人爱好者的智能机械臂线上实践课。通过系统讲解与讲师端真机演示，从 ROS2 通信、MoveIt2 运动规划到视觉定位、手眼标定与抓放任务编排，把“了解机械臂”变成“讲清抓取与操作闭环”，为保研、竞赛、毕设和求职积累一段可展示、可复盘的机器人项目经历。",
+  "course_features": [],
+  "full_description_text": "",
+  "full_description_image_count": 0,
+  "h5_description_text": "",
+  "h5_description_image_count": 0
+}

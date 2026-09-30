@@ -1,0 +1,15 @@
+{
+  "course_id": "43",
+  "review_status": "draft",
+  "collected_at": "2026-09-29T09:05:20.599200+00:00",
+  "source_url": "https://www.arborseek.com/course/43",
+  "api_url": "https://arboradmin.saikr.com/miniapp/course/detail/43",
+  "title": "四足机器人无人巡检实训营",
+  "subtitle": "零基础入门四足机器人无人巡检实战，掌握宇树 Go2 EDU 核心应用技能",
+  "description": "面向大学生与机器人爱好者的四足机器人线上实践课。20 小时系统讲解与讲师端真机演示，从 ROS2 通信、SLAM 建图到 Nav2 导航与巡检编排，把“了解机器狗”变成“讲清无人巡检”，为保研、竞赛、毕设和求职备好敲门砖。",
+  "course_features": [],
+  "full_description_text": "",
+  "full_description_image_count": 0,
+  "h5_description_text": "",
+  "h5_description_image_count": 0
+}

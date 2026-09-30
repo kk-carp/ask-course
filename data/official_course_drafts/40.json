@@ -1,0 +1,32 @@
+{
+  "course_id": "40",
+  "review_status": "draft",
+  "collected_at": "2026-09-29T09:05:20.124246+00:00",
+  "source_url": "https://www.arborseek.com/course/40",
+  "api_url": "https://arboradmin.saikr.com/miniapp/course/detail/40",
+  "title": "WorkBuddy AI 助手实战课程",
+  "subtitle": "零基础快速上手 WorkBuddy AI 助手，提升工作效率",
+  "description": "",
+  "course_features": [
+    {
+      "title": "实战项目",
+      "content": "WorkBuddy AI助手开发/覆盖核心功能实现"
+    },
+    {
+      "title": "案例实操",
+      "content": "提供完整案例操作/边学边练"
+    },
+    {
+      "title": "学习方式",
+      "content": "录播课程/支持多端学习"
+    },
+    {
+      "title": "AI应用",
+      "content": "聚焦AI助手场景/提升工程化能力"
+    }
+  ],
+  "full_description_text": "",
+  "full_description_image_count": 8,
+  "h5_description_text": "",
+  "h5_description_image_count": 8
+}

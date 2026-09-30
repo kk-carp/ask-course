@@ -1,0 +1,32 @@
+{
+  "course_id": "24",
+  "review_status": "draft",
+  "collected_at": "2026-09-29T09:05:19.137447+00:00",
+  "source_url": "https://www.arborseek.com/course/24",
+  "api_url": "https://arboradmin.saikr.com/miniapp/course/detail/24",
+  "title": "Git从入门到精通：零基础实战教程",
+  "subtitle": "AI时代下的入门级课程",
+  "description": "",
+  "course_features": [
+    {
+      "title": "零基础入门",
+      "content": "循序渐进，轻松掌握 Git 核心命令与工作流"
+    },
+    {
+      "title": "理论结合实战",
+      "content": "覆盖日常开发、分支管理、冲突解决全场景"
+    },
+    {
+      "title": "企业协作规范",
+      "content": "快速适配团队开发与代码托管平台"
+    },
+    {
+      "title": "告别死记硬背",
+      "content": "理解底层逻辑，真正做到灵活运用、举一反三"
+    }
+  ],
+  "full_description_text": "",
+  "full_description_image_count": 0,
+  "h5_description_text": "",
+  "h5_description_image_count": 0
+}

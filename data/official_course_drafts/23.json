@@ -1,0 +1,32 @@
+{
+  "course_id": "23",
+  "review_status": "draft",
+  "collected_at": "2026-09-29T09:05:19.011823+00:00",
+  "source_url": "https://www.arborseek.com/course/23",
+  "api_url": "https://arboradmin.saikr.com/miniapp/course/detail/23",
+  "title": "OpenClaw开源AI智能体实战指南",
+  "subtitle": "部署 + 配置 + 运维一站式掌握",
+  "description": "",
+  "course_features": [
+    {
+      "title": "学习时长",
+      "content": "2周/建议每周10个小时"
+    },
+    {
+      "title": "授课形式",
+      "content": "全程实操落地 / 学完即可独立部署"
+    },
+    {
+      "title": "覆盖平台",
+      "content": "本地 + 云服务器部署+多个聊天平台"
+    },
+    {
+      "title": "课程保障",
+      "content": "一步一指令 / 无虚构成品 / 稳定可运行"
+    }
+  ],
+  "full_description_text": "",
+  "full_description_image_count": 9,
+  "h5_description_text": "",
+  "h5_description_image_count": 9
+}

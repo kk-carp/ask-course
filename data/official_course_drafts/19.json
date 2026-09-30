@@ -1,0 +1,32 @@
+{
+  "course_id": "19",
+  "review_status": "draft",
+  "collected_at": "2026-09-29T09:05:18.124406+00:00",
+  "source_url": "https://www.arborseek.com/course/19",
+  "api_url": "https://arboradmin.saikr.com/miniapp/course/detail/19",
+  "title": "手把手学 Ubuntu：从安装配置到实战应用",
+  "subtitle": "全能上手，零基础也能学会，直达实操落地",
+  "description": "",
+  "course_features": [
+    {
+      "title": "学习时长",
+      "content": "学习时长 3 周 / 建议每周 6 个小时"
+    },
+    {
+      "title": "实操占比",
+      "content": "超过70% / 连续真机实操任务"
+    },
+    {
+      "title": "答疑服务",
+      "content": "每天10小时 / 专属学习群实时交流"
+    },
+    {
+      "title": "配套资源",
+      "content": "全套资料包 / 课程内容终身回放学习"
+    }
+  ],
+  "full_description_text": "",
+  "full_description_image_count": 9,
+  "h5_description_text": "",
+  "h5_description_image_count": 8
+}
