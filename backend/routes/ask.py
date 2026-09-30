@@ -28,6 +28,7 @@ from backend.errors import ServiceUnavailableError, UpstreamServiceError
 from backend.services.intent_router import Intent, handle_routed_turn
 from backend.services.pilot_service import eligible
 from backend.services.qa_service import AskResult, iter_answer_events
+from backend.services.question_decomposition import split_questions
 
 router = APIRouter(tags=["ask"])
 _log = logging.getLogger("backend.ask")
@@ -122,12 +123,12 @@ async def ask(payload: AskRequest, request: Request, response: Response) -> AskR
 async def ask_stream(
     payload: AskRequest, request: Request, response: Response
 ) -> StreamingResponse:
-    """SSE：游客与登录共用编排结果字段；游客 content 暂不吐 delta。"""
-    if load_auth_context(request) is None:
+    """游客或多问题使用统一编排；登录用户的单问题保留逐字输出。"""
+    if load_auth_context(request) is None or len(split_questions(payload.question)) > 1:
         result = await ask(payload, request, response)
         data = result.model_dump(mode="json")
 
-        def guest_events() -> Iterator[str]:
+        def completed_events() -> Iterator[str]:
             yield _sse_pack(
                 "meta",
                 {
@@ -141,7 +142,7 @@ async def ask_stream(
             yield _sse_pack("final", data)
             yield _sse_pack("done", {})
 
-        stream = StreamingResponse(guest_events(), media_type="text/event-stream")
+        stream = StreamingResponse(completed_events(), media_type="text/event-stream")
         for name, value in response.raw_headers:
             if name.lower() == b"set-cookie":
                 stream.raw_headers.append((name, value))

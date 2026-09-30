@@ -54,6 +54,7 @@ from backend.services.public_course_info import (
     public_fact_topic,
 )
 from backend.services.qa_service import AskResult, answer_question
+from backend.services.question_decomposition import split_questions
 
 _log = logging.getLogger("backend.ask_orchestrator")
 
@@ -364,7 +365,71 @@ def _enrich_related(related: list[RelatedCourse]) -> list[RelatedCourse]:
 
 
 def run_ask_turn(payload: AskRequest, identity: AskIdentity) -> AskResponse:
-    """执行一轮问答；调用方负责限流、pilot 与身份解析。"""
+    """一轮含多个问题时逐项回答；敏感问题不覆盖其他回答。"""
+    questions = split_questions(payload.question)
+    if len(questions) == 1:
+        return _run_single_question(payload, identity)
+
+    responses: list[AskResponse] = []
+    failures: list[HTTPException] = []
+    conversation_id = payload.conversation_id
+    for question in questions:
+        part = payload.model_copy(update={
+            "question": question, "conversation_id": conversation_id,
+        })
+        try:
+            result = _run_single_question(
+                part, identity, record_history=False, context_question=payload.question,
+            )
+        except HTTPException as exc:
+            if exc.status_code not in {502, 503}:
+                raise
+            failures.append(exc)
+            result = AskResponse(
+                answer="这项查询暂时不可用，请稍后重试。",
+                hit=False,
+                error_type="upstream_error" if exc.status_code == 502 else "service_unavailable",
+            )
+        conversation_id = result.conversation_id or conversation_id
+        responses.append(result)
+
+    if len(failures) == len(questions):
+        raise failures[0]
+
+    owners = [result.owner for result in responses if result.owner is not None]
+    response = AskResponse(
+        answer="\n\n".join(
+            f"{index}. {question}\n{result.answer}"
+            for index, (question, result) in enumerate(zip(questions, responses), 1)
+        ),
+        hit=any(result.hit is True for result in responses),
+        sources=list({
+            (source.document_id, source.snippet): source
+            for result in responses for source in result.sources
+        }.values()),
+        related_courses=list({
+            item.id: item for result in responses for item in result.related_courses
+        }.values())[:3],
+        owner=next((owner for owner in owners if owner.configured), owners[0] if owners else None),
+        conversation_id=conversation_id,
+        intent="multi_question",
+        error_type=next((result.error_type for result in responses if result.error_type), None),
+        llm_called=any(result.llm_called for result in responses),
+        prompt_tokens=sum(result.prompt_tokens for result in responses),
+        completion_tokens=sum(result.completion_tokens for result in responses),
+    )
+    if identity.user_id is None and identity.visitor_id and conversation_id:
+        _remember_guest_dialogue(
+            identity.visitor_id, str(conversation_id), payload.question, response.answer,
+        )
+    return response
+
+
+def _run_single_question(
+    payload: AskRequest, identity: AskIdentity, *, record_history: bool = True,
+    context_question: str | None = None,
+) -> AskResponse:
+    """执行一个问题；拆分出的问答由调用方合并后保存访客历史。"""
     allowed_spaces = identity.allowed_spaces
     user_id = identity.user_id
     user_role = identity.user_role
@@ -384,9 +449,10 @@ def run_ask_turn(payload: AskRequest, identity: AskIdentity) -> AskResponse:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         if preview is not None:
             result, related = _selection_response(preview)
-            _remember_guest_dialogue(
-                visitor_id, dialogue_id, payload.question, result.answer
-            )
+            if record_history:
+                _remember_guest_dialogue(
+                    visitor_id, dialogue_id, payload.question, result.answer
+                )
             bind_id = _course_id_to_bind(related=related)
             if bind_id:
                 _bind_selected_course(visitor_id, dialogue_id, bind_id)
@@ -396,15 +462,25 @@ def run_ask_turn(payload: AskRequest, identity: AskIdentity) -> AskResponse:
                 intent=Intent.recommend.value,
             )
 
+    if context_question and not dialogue_course_id:
+        matches = search_related_courses(
+            context_question, courses=load_recommendable_courses()
+        )
+        if len(matches) == 1:
+            dialogue_course_id = matches[0].course_id
+            if dialogue_id and visitor_id:
+                _bind_selected_course(visitor_id, dialogue_id, dialogue_course_id)
+
     routed = handle_routed_turn(payload.question, course_id=dialogue_course_id)
     if routed.handled:
         _log.info("ask short-circuit intent=%s", routed.intent.value)
         result = routed.result
         related = list(routed.related_courses)
         if dialogue_id and visitor_id:
-            _remember_guest_dialogue(
-                visitor_id, dialogue_id, payload.question, result.answer
-            )
+            if record_history:
+                _remember_guest_dialogue(
+                    visitor_id, dialogue_id, payload.question, result.answer
+                )
             bind_id = _course_id_to_bind(
                 related=related, routed_course_id=routed.course_id
             )
@@ -455,9 +531,10 @@ def run_ask_turn(payload: AskRequest, identity: AskIdentity) -> AskResponse:
         )
         card = [related_course_card(official)]
         if dialogue_id and visitor_id:
-            _remember_guest_dialogue(
-                visitor_id, dialogue_id, payload.question, result.answer
-            )
+            if record_history:
+                _remember_guest_dialogue(
+                    visitor_id, dialogue_id, payload.question, result.answer
+                )
             _bind_selected_course(visitor_id, dialogue_id, official.course_id)
             result = replace(result, conversation_id=UUID(dialogue_id))
         return to_response(result, _enrich_related(card), intent="course_info")
@@ -492,9 +569,10 @@ def run_ask_turn(payload: AskRequest, identity: AskIdentity) -> AskResponse:
         raise HTTPException(status_code=500, detail="问答处理失败") from exc
 
     if dialogue_id and visitor_id:
-        _remember_guest_dialogue(
-            visitor_id, dialogue_id, payload.question, result.answer
-        )
+        if record_history:
+            _remember_guest_dialogue(
+                visitor_id, dialogue_id, payload.question, result.answer
+            )
         if course_id and len(related) <= 1:
             _bind_selected_course(visitor_id, dialogue_id, course_id)
         result = replace(result, conversation_id=UUID(dialogue_id))

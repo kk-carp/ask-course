@@ -138,13 +138,14 @@
     event("question");
     try {
       const result = await json("ask", "POST", { question, course_id: courseId, channel: "course_page", conversation_id: conversationId });
+      if (["upstream_error", "service_unavailable"].includes(result.error_type)) event("error");
       conversationId = result.conversation_id || conversationId;
       try { localStorage.setItem(key, conversationId); } catch (_) { /* 当前会话仍可继续 */ }
       if (result.related_courses?.length) event("recommendation");
       line(result.answer, "as-agent");
       for (const item of (result.related_courses || []).slice(0, 3)) courseCard(item);
       const matched = result.related_courses?.length;
-      const forceHandoff = result.intent === "advisor" || result.intent === "commercial";
+      const forceHandoff = ["advisor", "commercial", "multi_question"].includes(result.intent);
       if (result.owner && (forceHandoff || !matched)) {
         handoff(result.owner, `课程咨询摘要\n当前课程：${config.course_title}\n问题：${question}`);
       }

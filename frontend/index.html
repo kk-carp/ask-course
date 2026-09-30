@@ -461,6 +461,7 @@
       const answer = streamedText || payload.answer || "";
       const meta = wrap.querySelector(".meta-row");
       const tags = [];
+      if (payload.intent === "multi_question") tags.push('<span class="tag">逐项回答</span>');
       if (hit === true) tags.push(`<span class="tag hit">${payload.intent === "course_info" ? "官网课程信息" : "有资料依据"}</span>`);
       if (hit === false && payload.intent === "recommend" && !(payload.related_courses || []).length) {
         tags.push('<span class="tag">选课咨询</span>');
@@ -492,9 +493,9 @@
         ).join("")}</div>`;
       }
       const owner = payload.owner;
-      const forceHandoff = payload.intent === "advisor" || payload.intent === "commercial";
+      const forceHandoff = ["advisor", "commercial", "multi_question"].includes(payload.intent);
       const matchedCourses = payload.related_courses && payload.related_courses.length;
-      if (hit === false && owner && (forceHandoff || !matchedCourses)) {
+      if (owner && (forceHandoff || (hit === false && !matchedCourses))) {
         if (owner.configured) {
           const note = isImageContact(owner.contact)
             ? "用企业微信扫描二维码。二维码来自课程映射，不是模型生成。"
