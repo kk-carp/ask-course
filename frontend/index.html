@@ -392,7 +392,7 @@
 
     function contactMarkup(contact) {
       const value = String(contact || "").trim();
-      if (!isImageContact(value)) return `<div>${escapeHtml(value)}</div>`;
+      if (!isImageContact(value)) return /^https:\/\//.test(value) ? `<a href="${escapeHtml(value)}" target="_blank" rel="noopener noreferrer">联系课程顾问</a>` : "";
       const src = escapeHtml(value);
       return `<img class="qr" src="${src}" alt="企业微信二维码" data-contact="${src}" width="168" height="168" />`;
     }
@@ -484,7 +484,8 @@
           const blurb = item.description
             ? `<small>${escapeHtml(item.description)}</small>`
             : (item.id ? `<small>课程 ID ${escapeHtml(item.id)}</small>` : "");
-          return `<div class="course-card${cover ? "" : " no-cover"}">${cover}<div class="card-body"><strong>${escapeHtml(item.title || "")}</strong>${blurb}<div class="card-actions">${detail ? `<a href="${escapeHtml(detail)}" target="_blank" rel="noopener noreferrer">查看官网课程详情</a>` : ""}${item.purchase_url ? `<button type="button" class="ghost" data-buy="${escapeHtml(item.id)}">去官网购买页</button>` : ""}</div></div></div>`;
+          const facts = [item.reason ? `推荐依据：${item.reason}` : "", ...(item.requirements || []), ...(item.pending || []).map(x => `需确认：${x}`)].filter(Boolean).map(x => `<small>${escapeHtml(x)}</small>`).join("");
+          return `<div class="course-card${cover ? "" : " no-cover"}">${cover}<div class="card-body"><strong>${escapeHtml(item.title || "")}</strong>${blurb}${facts}<div class="card-actions">${detail ? `<a href="${escapeHtml(detail)}" target="_blank" rel="noopener noreferrer">查看官网课程详情</a>` : ""}${item.purchase_url ? `<button type="button" class="ghost" data-buy="${escapeHtml(item.id)}">去官网购买页</button>` : ""}</div></div></div>`;
         }).join("")}</div>`;
       }
       if (payload.sources && payload.sources.length) {
@@ -492,14 +493,13 @@
           `<div class="source"><b>${escapeHtml(src.title || "来源")}</b>${escapeHtml(src.snippet || "")}</div>`
         ).join("")}</div>`;
       }
+      if (payload.fact_sources?.length) html += `<div class="sources">${payload.fact_sources.map(src => `<div class="source">${src.status === "official" ? "官网实时信息" : "课程文字资料"} · 更新于 ${escapeHtml(src.updated_at?.slice(0, 10) || "")}</div>`).join("")}</div>`;
       const owner = payload.owner;
       const forceHandoff = ["advisor", "commercial", "multi_question"].includes(payload.intent);
       const matchedCourses = payload.related_courses && payload.related_courses.length;
       if (owner && (forceHandoff || (hit === false && !matchedCourses))) {
         if (owner.configured) {
-          const note = isImageContact(owner.contact)
-            ? "用企业微信扫描二维码。二维码来自课程映射，不是模型生成。"
-            : "联系方式来自课程映射，不是模型生成。";
+          const note = isImageContact(owner.contact) ? "请扫描二维码联系顾问。" : "请打开联系方式联系顾问。";
           html += `<div class="handoff"><div class="who">${escapeHtml(owner.name || "课程顾问")}</div>
             <div>${escapeHtml(owner.topic_name || "")} · ${note}</div>
             ${contactMarkup(owner.contact)}</div>`;
@@ -508,12 +508,17 @@
             <div>你可以先查看官网课程详情，或继续咨询已公开的课程信息。</div></div>`;
         }
       }
+      if (payload.handoff_summary) html += `<div class="handoff"><button type="button" class="ghost" data-copy-summary="${escapeHtml(payload.handoff_summary)}">复制咨询摘要</button><pre>${escapeHtml(payload.handoff_summary)}</pre></div>`;
       wrap.querySelector(".a").innerHTML = html;
       const qr = wrap.querySelector(".handoff .qr");
       if (qr) {
         qr.addEventListener("error", () => {
           const fallback = document.createElement("div");
-          fallback.textContent = qr.dataset.contact || "";
+          if (payload.fallback_contact && /^https:\/\//.test(payload.fallback_contact)) {
+            const link = document.createElement("a"); link.href = payload.fallback_contact;
+            link.textContent = "二维码不可用，查看备用联系方式"; link.target = "_blank"; link.rel = "noopener noreferrer";
+            fallback.append(link);
+          } else fallback.textContent = "二维码暂不可用，请稍后重试。";
           qr.replaceWith(fallback);
         });
       }
@@ -628,6 +633,12 @@
       renderPrompts();
     });
     $("log").addEventListener("click", async (event) => {
+      const copy = event.target.closest("button[data-copy-summary]");
+      if (copy) {
+        try { await navigator.clipboard.writeText(copy.dataset.copySummary); copy.textContent = "已复制"; }
+        catch (_) { copy.textContent = "复制失败，请手动选择摘要"; }
+        return;
+      }
       const target = event.target.closest("button[data-buy]");
       if (!target) return;
       target.disabled = true;

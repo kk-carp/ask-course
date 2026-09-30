@@ -27,6 +27,26 @@ def test_parse_presale_qr_ignores_missing_field() -> None:
     assert parse_presale_qr({"data": {}}) is None
 
 
+def test_unreachable_image_is_not_a_configured_contact(monkeypatch):
+    from contextlib import contextmanager
+    import httpx
+    from backend.services import course_qr_service as service
+
+    monkeypatch.setattr(service, "_cache", {})
+    monkeypatch.setattr(httpx.Client, "get", lambda *_a, **_k: httpx.Response(200,
+        json={"data": {"course": {"id": 99, "title": "测试课程", "pre_sale_service_qrcode": QR}}},
+        request=httpx.Request("GET", "https://official.test/course/99")))
+
+    @contextmanager
+    def missing(*_a, **_k):
+        yield httpx.Response(404)
+
+    monkeypatch.setattr(httpx.Client, "stream", missing)
+    assert service.lookup_official_presale("99") is None
+    # 即使返回一个有效图片地址，错误课程 ID 也不能形成承接出口。
+    assert service.lookup_official_presale("43") is None
+
+
 def test_slug_course_id_does_not_call_official_api(monkeypatch) -> None:
     def fail_get(*_args, **_kwargs):
         raise AssertionError("slug course id must not call the official API")

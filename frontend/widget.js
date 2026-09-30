@@ -98,6 +98,9 @@
     }
     card.append(el("strong", item.title || ""));
     if (item.description) card.append(el("p", item.description));
+    if (item.reason) card.append(el("p", `推荐依据：${item.reason}`));
+    for (const text of item.requirements || []) card.append(el("small", text));
+    for (const text of item.pending || []) card.append(el("small", `需确认：${text}`));
     if (href) contactLink(card, href, "查看官网课程详情");
     if (item.purchase_url) card.append(button("去官网购买页", () => purchase(item.id), "as-primary"));
     return card;
@@ -147,9 +150,10 @@
       const matched = result.related_courses?.length;
       const forceHandoff = ["advisor", "commercial", "multi_question"].includes(result.intent);
       if (result.owner && (forceHandoff || !matched)) {
-        handoff(result.owner, `课程咨询摘要\n当前课程：${config.course_title}\n问题：${question}`);
+        handoff(result.owner, result.handoff_summary);
       }
       for (const source of result.sources || []) line(`依据：${source.title}${source.snippet ? " · " + source.snippet : ""}`, "as-source");
+      for (const source of result.fact_sources || []) line(`资料来源：${source.status === "official" ? "官网实时信息" : "课程文字资料"} · 更新于 ${source.updated_at.slice(0, 10)}`, "as-source");
     } catch (cause) { error(cause.message); }
     inputArea.append(form);
   }

@@ -56,6 +56,8 @@ from backend.services.public_course_info import (
 from backend.services.qa_service import AskResult, answer_question
 from backend.services.course_facts import answer_course_fact
 from backend.services.turn_understanding import Understanding, understand_turn
+from backend.services.handoff_summary import build_handoff_summary
+from backend.services.topic_owner_service import is_usable_contact
 
 _log = logging.getLogger("backend.ask_orchestrator")
 
@@ -297,6 +299,7 @@ def _selection_response(preview: dict) -> tuple[AskResult, list[RelatedCourse]]:
                 title=item["title"],
                 purchase_url=item.get("purchase_url"),
                 source_url=item["source_url"],
+                reason=item["reason"],
             )
             for item in preview["recommendations"]
         ]
@@ -353,6 +356,16 @@ def _enrich_related(related: list[RelatedCourse]) -> list[RelatedCourse]:
             ),
             None,
         )
+        requirements, pending = list(item.requirements), list(item.pending)
+        for query in ("基础要求", "硬件要求", "观看期限"):
+            fact = answer_course_fact(query, item.id)
+            if fact:
+                if any(source["status"] in {"unknown", "conflict"} for source in fact[1]):
+                    pending.append(f"{query}：{fact[0][:300]}")
+                elif query != "观看期限":
+                    requirements.append(f"{query}：{fact[0][:400]}")
+        if not approved:
+            pending.append("销售审核尚未完成，购买入口暂不开放。")
         enriched.append(
             RelatedCourse(
                 id=item.id,
@@ -365,6 +378,9 @@ def _enrich_related(related: list[RelatedCourse]) -> list[RelatedCourse]:
                 or f"https://www.arborseek.com/course/{item.id}",
                 cover_url=item.cover_url
                 or (official.cover_url if official else None),
+                reason=item.reason or ("与当前咨询方向相关，依据官网课程介绍。" if official else None),
+                requirements=list(dict.fromkeys(requirements)),
+                pending=list(dict.fromkeys(pending)),
             )
         )
     return enriched
@@ -410,17 +426,27 @@ def run_ask_turn(payload: AskRequest, identity: AskIdentity) -> AskResponse:
     response.llm_called = response.llm_called or understanding.llm_called
     response.prompt_tokens += understanding.prompt_tokens
     response.completion_tokens += understanding.completion_tokens
+    if is_usable_contact(settings.handoff_fallback_contact):
+        response.fallback_contact = settings.handoff_fallback_contact
     if identity.visitor_id and response.conversation_id:
         key = str(response.conversation_id)
         _remember_guest_dialogue(identity.visitor_id, key, payload.question, response.answer)
-        if response.related_courses and response.intent in {"recommend", "compare"}:
-            with db.SessionLocal() as session:
-                row = load_owned(session, key, identity.visitor_id)
-                if row:
-                    saved = json.loads(row.profile_json)
+        with db.SessionLocal() as session:
+            row = load_owned(session, key, identity.visitor_id)
+            if row:
+                saved = json.loads(row.profile_json)
+                if response.related_courses and response.intent in {"recommend", "compare"}:
                     saved["_candidate_course_ids"] = [item.id for item in response.related_courses]
                     row.profile_json = json.dumps(saved, ensure_ascii=False)
                     session.commit()
+                if response.owner:
+                    response.handoff_summary = build_handoff_summary(
+                        profile=saved, course_id=saved.get("_selected_course_id") or payload.course_id,
+                        candidates=saved.get("_candidate_course_ids", []), question=payload.question,
+                    )
+    elif response.owner:
+        response.handoff_summary = build_handoff_summary(profile={}, course_id=payload.course_id,
+                                                        candidates=[x.id for x in response.related_courses], question=payload.question)
     return response
 
 

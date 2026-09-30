@@ -18,6 +18,8 @@ from backend.services.consultation_service import answer, load_owned, present, s
 from backend.services.topic_owner_service import is_usable_contact
 from backend.services.auth_service import can_manage_documents, load_auth_context
 from backend.services.pilot_service import eligible, pilot_percent
+from backend.services.purchase_service import validate_purchase_destination
+from backend.errors import ServiceUnavailableError
 
 router = APIRouter(tags=["consultations"])
 _EVENTS = frozenset({"widget_impression", "widget_open", "question", "recommendation", "handoff", "error"})
@@ -158,13 +160,19 @@ def purchase_destination(
     course = get_approved_course(course_id, verify_live=True)
     if course is None:
         raise HTTPException(status_code=404, detail="课程暂不可购买")
+    try:
+        destination = validate_purchase_destination(course)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ServiceUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     session.add(
         FunnelEvent(
             visitor_id=visitor_id, course_id=course_id, event_name="purchase_click"
         )
     )
     session.commit()
-    return {"url": course.purchase_url}
+    return {"url": destination}
 
 
 @router.get("/courses/{course_id}/purchase")
@@ -173,7 +181,12 @@ def verified_purchase_destination(course_id: str) -> dict:
     course = get_approved_course(course_id, verify_live=True)
     if course is None:
         raise HTTPException(status_code=404, detail="课程暂不可购买")
-    return {"url": course.purchase_url}
+    try:
+        return {"url": validate_purchase_destination(course)}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ServiceUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 def _require_admin(request: Request) -> None:

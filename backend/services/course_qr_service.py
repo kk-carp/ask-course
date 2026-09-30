@@ -54,7 +54,9 @@ def lookup_official_presale(course_id: str) -> OwnerInfo | None:
         ) as client:
             response = client.get(f"{base}/{key}")
         response.raise_for_status()
-        parsed = parse_presale_qr(response.json())
+        payload = response.json()
+        raw = payload.get("data", {}).get("course", {})
+        parsed = parse_presale_qr(payload) if str(raw.get("id")) == key else None
     except Exception:
         _log.warning("official presale qr lookup failed course_id=%s", key)
         parsed = None
@@ -62,12 +64,13 @@ def lookup_official_presale(course_id: str) -> OwnerInfo | None:
     if parsed is not None:
         topic_name, qr = parsed
         if is_usable_contact(qr):
-            owner = OwnerInfo(
-                configured=True,
-                topic_key=key,
-                topic_name=topic_name,
-                name="课程顾问",
-                contact=qr,
-            )
+            try:
+                with httpx.Client(timeout=settings.course_detail_timeout_seconds, follow_redirects=False) as client:
+                    with client.stream("GET", qr) as image:
+                        available = image.status_code == 200 and image.headers.get("content-type", "").startswith("image/")
+                if available:
+                    owner = OwnerInfo(configured=True, topic_key=key, topic_name=topic_name, name="课程顾问", contact=qr)
+            except httpx.HTTPError:
+                _log.warning("presale qr image unavailable course_id=%s", key)
     _cache[key] = (now + _CACHE_SECONDS, owner)
     return owner

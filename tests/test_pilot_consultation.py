@@ -77,6 +77,7 @@ def test_unknown_course_never_emits_purchase_url(monkeypatch):
 
 
 def test_consultation_flow_is_owned_and_purchase_is_revalidated(monkeypatch):
+    monkeypatch.setattr("backend.routes.consultations.validate_purchase_destination", lambda course: course.purchase_url)
     engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )

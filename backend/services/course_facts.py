@@ -32,12 +32,12 @@ def fact_topic(question: str) -> str | None:
     return next((topic for topic, pattern in _TOPICS if re.search(pattern, question)), None)
 
 
-def live_course(course_id: str) -> tuple[dict, str] | None:
+def live_course(course_id: str, *, force_refresh: bool = False) -> tuple[dict, str] | None:
     """最多缓存一分钟；请求失败不以过期价格作答。"""
     if not course_id.isdigit() or not settings.course_detail_url:
         return None
     cached = _cache.get(course_id)
-    if cached and cached[0] > time.monotonic():
+    if not force_refresh and cached and cached[0] > time.monotonic():
         return cached[1], cached[2]
     try:
         with httpx.Client(timeout=settings.course_detail_timeout_seconds, follow_redirects=False) as client:

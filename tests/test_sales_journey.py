@@ -131,6 +131,8 @@ def test_explicit_handoff_uses_last_recommended_course(sales_chat, monkeypatch):
     result = send(client, "找人工", first["conversation_id"])
     assert result["intent"] == "advisor"
     assert seen["course_id"] == "99"
+    assert "正在咨询课程：99" in result["handoff_summary"]
+    assert "需要顾问确认的问题：找人工" in result["handoff_summary"]
 
 
 def test_page_context_handoff_follows_selected_other_course(sales_chat, monkeypatch):

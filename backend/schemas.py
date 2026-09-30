@@ -59,6 +59,9 @@ class RelatedCourse(BaseModel):
     purchase_url: str | None = None
     source_url: str | None = None
     cover_url: str | None = None
+    reason: str | None = None
+    requirements: list[str] = Field(default_factory=list)
+    pending: list[str] = Field(default_factory=list)
 
 
 class AskResponse(BaseModel):
@@ -74,6 +77,8 @@ class AskResponse(BaseModel):
     prompt_tokens: int = 0
     completion_tokens: int = 0
     fact_sources: list[dict[str, str]] = Field(default_factory=list)
+    handoff_summary: str | None = None
+    fallback_contact: str | None = None
 
 
 class ConversationItem(BaseModel):
