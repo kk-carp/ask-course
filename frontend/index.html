@@ -551,6 +551,11 @@
       }
     }
 
+    function appendRetry(wrap, question) {
+      const retry = document.createElement("button"); retry.textContent = "重试本次提问";
+      retry.type = "button"; retry.addEventListener("click", () => ask(question)); wrap.querySelector(".a").append(retry);
+    }
+
     async function ask(question) {
       if (state.asking) return;
       state.asking = true;
@@ -592,10 +597,10 @@
           if (name === "error") throw new Error(data.detail || "问答失败");
           if (name !== "progress") paintTurn(wrap, latest, streamed || latest.answer);
         });
+        if (["upstream_error", "service_unavailable"].includes(latest.error_type)) appendRetry(wrap, question);
       } catch (err) {
         wrap.querySelector(".a").textContent = err.message || "提问失败";
-        const retry = document.createElement("button"); retry.textContent = "重试本次提问";
-        retry.type = "button"; retry.addEventListener("click", () => ask(question)); wrap.querySelector(".a").append(retry);
+        appendRetry(wrap, question);
       } finally {
         state.asking = false;
         $("send").disabled = false;

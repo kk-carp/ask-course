@@ -84,7 +84,8 @@ def answer_course_fact(question: str, course_id: str) -> tuple[str, list[dict]] 
                 answer += "官网显示活动信息，参与条件和截止时间请查看官网活动说明。"
             else:
                 answer += "当前接口未提供额外团购或秒杀活动信息；个别让价需要课程顾问确认。"
-        return answer, [{"source": f"{settings.course_detail_url.rstrip('/')}/{course_id}", "updated_at": timestamp, "status": "official"}]
+        status = "official" if price is not None else "unknown"
+        return answer, [{"source": f"{settings.course_detail_url.rstrip('/')}/{course_id}", "updated_at": timestamp, "status": status}]
     try:
         registry = json.loads((ROOT / "data/course_facts.json").read_text(encoding="utf-8"))
         record = registry[course_id]

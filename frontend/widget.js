@@ -171,7 +171,10 @@
         parts[part.index - 1] = `${part.index}. ${part.question}\n${part.answer}`;
         pending.textContent = parts.filter(Boolean).join("\n\n");
       });
-      if (["upstream_error", "service_unavailable"].includes(result.error_type)) event("error");
+      if (["upstream_error", "service_unavailable"].includes(result.error_type)) {
+        event("error");
+        body.append(button("重试本次提问", () => askQuestion(form, question)));
+      }
       conversationId = result.conversation_id || conversationId;
       try { localStorage.setItem(key, conversationId); } catch (_) { /* 当前会话仍可继续 */ }
       if (result.related_courses?.length) event("recommendation");

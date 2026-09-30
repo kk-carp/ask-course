@@ -102,6 +102,7 @@ def to_response(
         intent=intent,
         error_type=result.error_type,
         llm_called=result.llm_called,
+        generation_called=result.llm_called,
         prompt_tokens=result.prompt_tokens,
         completion_tokens=result.completion_tokens,
     )
@@ -511,6 +512,7 @@ def _run_questions(payload: AskRequest, identity: AskIdentity, understanding: Un
         intent="multi_question",
         error_type=next((result.error_type for result in responses if result.error_type), None),
         llm_called=any(result.llm_called for result in responses),
+        generation_called=any(result.generation_called for result in responses),
         prompt_tokens=sum(result.prompt_tokens for result in responses),
         completion_tokens=sum(result.completion_tokens for result in responses),
         fact_sources=[source for result in responses for source in result.fact_sources],
@@ -628,6 +630,7 @@ def _run_single_question(
             fact_sources=evidence, conversation_id=UUID(dialogue_id) if dialogue_id else None,
             related_courses=_enrich_related([related_course_card(official)]) if official else [],
             intent="course_info",
+            error_type="upstream_error" if not evidence else None,
         )
     if official and topic:
         public_answer = answer_public_question(payload.question, official)

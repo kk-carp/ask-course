@@ -74,6 +74,7 @@ class AskResponse(BaseModel):
     intent: str | None = None
     error_type: str | None = None
     llm_called: bool = False
+    generation_called: bool = False
     prompt_tokens: int = 0
     completion_tokens: int = 0
     fact_sources: list[dict[str, str]] = Field(default_factory=list)

@@ -14,6 +14,7 @@ from backend.infra.generate import complete_chat
 from backend.services.consultation_service import validate_answer
 from backend.services.course_catalog_service import OfficialCourse
 from backend.services.intent_router import classify_intent
+from backend.services.course_facts import fact_topic
 from backend.services.profile_extraction import extract_profile_updates
 from backend.services.question_decomposition import split_questions
 
@@ -50,6 +51,10 @@ def understand_turn(question: str, *, page_course_id: str | None, profile: dict,
         profile_updates=extract_profile_updates(question, profile, profile.get("_pending_field"), use_model=False),
     )
     ordinal = re.search(r"第([一二三123])(?:门|个|款)", question)
+    explicit = next((x.course_id for x in catalog if x.title in question or
+                     re.search(rf"(?:课程\s*(?:ID\s*)?{re.escape(x.course_id)})(?!\d)", question, re.I)), None)
+    if explicit:
+        fallback.course_id = explicit
     if ordinal:
         index = "一二三".find(ordinal.group(1)) if not ordinal.group(1).isdigit() else int(ordinal.group(1)) - 1
         if 0 <= index < len(candidates):
@@ -58,6 +63,8 @@ def understand_turn(question: str, *, page_course_id: str | None, profile: dict,
         fallback.compare_ids = candidates[:3]
     if re.search(r"当前页面|这页|页面上", question):
         fallback.course_id = page_course_id
+    reference_locked = bool(explicit or ordinal or re.search(
+        r"当前页面|这页|页面上|这门课|这个课|该课|^(?:找人工|找课程顾问|找顾问|联系顾问|转人工)$", question))
     if not settings.chat_api_key:
         return fallback
     allowed = {item.course_id for item in catalog} | set(candidates)
@@ -93,10 +100,14 @@ def understand_turn(question: str, *, page_course_id: str | None, profile: dict,
                 continue
         if not all(isinstance(x, str) and 0 < len(x.strip()) <= 2000 for x in parsed.questions):
             return fallback
+        intent = parsed.intent if parsed.intent in {"content", "recommend", "pay", "commercial", "advisor"} else fallback.intent
+        # 明确的事实查询不受模型的商业意图猜测影响。
+        if fallback.intent == "content" and fact_topic(question):
+            intent = "content"
         return Understanding(
-            questions=parsed.questions,
-            intent=parsed.intent if parsed.intent in {"content", "recommend", "pay", "commercial", "advisor"} else fallback.intent,
-            course_id=parsed.course_id if parsed.course_id in allowed else fallback.course_id,
+            questions=[question] if len(parsed.questions) == 1 else parsed.questions,
+            intent=intent,
+            course_id=fallback.course_id if reference_locked else parsed.course_id if parsed.course_id in allowed else fallback.course_id,
             profile_updates=updates,
             compare_ids=[x for x in parsed.compare_ids if x in allowed],
             llm_called=True, prompt_tokens=result.usage.prompt_tokens, completion_tokens=result.usage.completion_tokens,

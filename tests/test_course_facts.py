@@ -41,3 +41,9 @@ def test_expired_price_is_not_returned_on_failure(monkeypatch):
     monkeypatch.setattr(httpx.Client, "get", lambda *_a, **_k: (_ for _ in ()).throw(httpx.ConnectError("offline")))
     answer, sources = course_facts.answer_course_fact("价格多少？", "42")
     assert "无法读取" in answer and sources == []
+
+
+def test_missing_official_price_is_not_verified(monkeypatch):
+    monkeypatch.setattr(course_facts, "live_course", lambda _: ({"id": 42, "price": None}, "now"))
+    answer, sources = course_facts.answer_course_fact("价格多少？", "42")
+    assert "未提供可核实" in answer and sources[0]["status"] == "unknown"

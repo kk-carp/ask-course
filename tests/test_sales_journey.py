@@ -100,6 +100,14 @@ def test_old_hardware_question_accepts_bare_no(sales_chat):
         assert json.loads(session.get(VisitorConsultation, cid).profile_json)["hardware"] == "no"
 
 
+def test_official_price_failure_is_retryable_not_a_knowledge_miss(sales_chat, monkeypatch):
+    client, _ = sales_chat
+    monkeypatch.setattr("backend.services.course_facts.live_course", lambda _: None)
+    result = send(client, "价格多少？", course_id="43")
+    assert result["error_type"] == "upstream_error" and result["hit"] is False
+    assert not result["generation_called"] and "无法读取" in result["answer"]
+
+
 def test_ordered_candidates_comparison_and_cross_page_continue(sales_chat):
     client, factory = sales_chat
     first = send(client, "想学具身智能，推荐课程", course_id="43")

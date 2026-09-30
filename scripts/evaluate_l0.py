@@ -51,14 +51,14 @@ def evaluate_case(client: httpx.Client, case: dict) -> list[str]:
     if payload.get("hit") is not expected_hit:
         problems.append(f"hit 期望 {expected_hit}，实际 {payload.get('hit')}")
 
-    sources = payload.get("sources") or []
+    sources = (payload.get("sources") or []) + (payload.get("fact_sources") or [])
     if case["require_sources"] and not sources:
         problems.append("命中回答没有来源")
     if not expected_hit:
-        if sources:
+        if payload.get("sources"):
             problems.append("未命中回答不应携带来源")
-        if payload.get("llm_called"):
-            problems.append("未命中仍调用了模型")
+        if payload.get("generation_called"):
+            problems.append("未命中仍调用了答案生成模型")
 
     expected_owner = case.get("expected_owner_topic_key")
     if expected_owner:
