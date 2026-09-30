@@ -84,6 +84,48 @@ def test_recommend_first_then_answer_course_questions_and_switch_goal(sales_chat
     assert [item["id"] for item in changed["related_courses"]] == ["42"]
 
 
+def test_undergraduate_project_request_gets_options_and_clear_questions(sales_chat, monkeypatch):
+    from backend.infra.generate import ChatResult
+    from backend.services import turn_understanding
+
+    client, _ = sales_chat
+    first = send(client, "帮我选课")
+    monkeypatch.setattr(settings, "chat_api_key", "test")
+    monkeypatch.setattr(turn_understanding, "complete_chat", lambda *_: ChatResult(json.dumps({
+        "questions": ["有什么推荐吗？"], "intent": "recommend", "profile_updates": {"goal": "保研项目"}})))
+    question = "我是一个本科生，刚接触具身智能，想做一个项目，方便保研，有什么推荐吗？"
+    result = send(client, question, first["conversation_id"])
+    assert {item["id"] for item in result["related_courses"]} == {"43", "99"}, result["answer"]
+    assert "项目" in result["answer"] and "Python" in result["answer"] and "ROS" in result["answer"]
+    assert "具体任务" not in result["answer"] and "没有找到" not in result["answer"]
+    assert "保证保研" not in result["answer"]
+    assert not any(item["purchase_url"] for item in result["related_courses"])
+
+
+def test_project_request_also_works_without_model_and_prior_questions(sales_chat):
+    client, _ = sales_chat
+    result = send(client, "我是本科生，刚接触具身智能，想做保研项目，有什么推荐吗？")
+    assert {item["id"] for item in result["related_courses"]} == {"43", "99"}
+    assert "实验记录" in result["answer"] and "完成期限" in result["answer"]
+    cid = result["conversation_id"]
+    updated = send(client, "学过 Python，没有机器人，每周四小时", cid)
+    assert "编程基础：" not in updated["answer"]
+    assert "练习条件：" not in updated["answer"]
+    assert "时间投入：" not in updated["answer"]
+    assert "完成期限：" in updated["answer"]
+    complete = send(client, "两个月内", cid)
+    assert "完成期限：" not in complete["answer"]
+
+
+def test_broad_project_purpose_offers_exploration_candidates(sales_chat):
+    client, _ = sales_chat
+    result = send(client, "想做一个保研项目，还不知道选什么方向，能推荐吗？")
+    assert 1 <= len(result["related_courses"]) <= 3
+    assert "还没有确定具体方向" in result["answer"]
+    assert "选题参考" in result["answer"]
+    assert "Python" in result["answer"] and "每周" in result["answer"]
+
+
 def test_old_hardware_question_accepts_bare_no(sales_chat):
     client, factory = sales_chat
     first = send(client, "想学机械臂")

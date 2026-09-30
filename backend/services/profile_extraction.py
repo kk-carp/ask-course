@@ -8,7 +8,7 @@ import re
 from backend.config import settings
 from backend.services.consultation_service import validate_answer
 
-_SPECIFIC_GOAL = re.compile(r"ROS|巡检|机械臂|抓取|导航|SLAM|大模型|智能体|编程|视觉", re.I)
+_SPECIFIC_GOAL = re.compile(r"ROS|巡检|机械臂|抓取|导航|SLAM|大模型|智能体|编程|视觉|具身|保研|毕设|毕业设计|竞赛|项目", re.I)
 _GOAL_STATEMENT = re.compile(r"(?:想学|想学习|想做|希望做|准备做|打算做|目标是|方向是)(.{0,100})")
 _HARDWARE = r"(?:硬件|机器人|机器狗|Go2|设备|机械臂)"
 _HOUR_NUMBERS = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
@@ -31,6 +31,8 @@ def _contextual_reply(text: str, field: str | None) -> dict:
         return {field: choices[field][value]}
     if field == "weekly_hours":
         return _rules(f"每周{value}" if "小时" in value else f"每周{value}小时")
+    if field == "deadline" and 2 <= len(value) <= 60:
+        return {"deadline": value}
     if field == "goal" and _SPECIFIC_GOAL.search(value) and not re.search(r"[？?]|怎么|什么|多少", value):
         return {"goal": value[:200]}
     return {}
@@ -87,7 +89,7 @@ def extract_profile_updates(text: str, current: dict, expected_field: str | None
                         "从访客本轮原话提取选课信息，仅输出 JSON 对象。允许键："
                         "goal（具体技术/应用目标，不要只写就业、竞赛等宽泛目的）、"
                         "basis（none/basic/experienced）、hardware（yes/no/unknown）、"
-                        "weekly_hours（1-80 的整数）。只填明确说出的信息；不推断、不推荐课程。"
+                        "weekly_hours（1-80 的整数）、deadline（明确说出的项目完成期限）。只填明确说出的信息；不推断、不推荐课程。"
                         f"上一问对应的字段：{expected_field or '无'}。短回答仅按该字段解释。"
                     ),
                 },
@@ -99,7 +101,7 @@ def extract_profile_updates(text: str, current: dict, expected_field: str | None
         except Exception:
             pass
     updates: dict = {}
-    for field in ("goal", "basis", "hardware", "weekly_hours"):
+    for field in ("goal", "basis", "hardware", "weekly_hours", "deadline"):
         if field not in proposal:
             continue
         try:

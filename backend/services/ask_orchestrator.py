@@ -314,7 +314,7 @@ def _selection_response(preview: dict) -> tuple[AskResult, list[RelatedCourse]]:
         )
         return (
             AskResult(
-                answer=f"{acknowledgement}{reasons}\n\n{followup}",
+                answer="\n\n".join(filter(None, [acknowledgement, preview.get("guidance"), reasons, followup])),
                 hit=False,
                 sources=[],
             ),
@@ -324,8 +324,10 @@ def _selection_response(preview: dict) -> tuple[AskResult, list[RelatedCourse]]:
         return (
             AskResult(
                 answer=(
-                    "目前可推荐课程里没有找到符合这个目标或已知学习条件的课程。"
-                    "你也可以告诉我希望完成的具体任务，我再帮你缩小范围。"
+                    "目前没有找到可确认适合你的课程。"
+                    + ("\n" + preview["guidance"] if preview.get("guidance") else "")
+                    + "\n可以补充你会哪些编程语言、是否学过 ROS，以及可用设备和每周时间；"
+                    "也可以先说更感兴趣的方向，例如机器人导航、机械臂操作或大模型应用。"
                 ),
                 hit=False,
                 sources=[],

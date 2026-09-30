@@ -15,5 +15,6 @@ def build_handoff_summary(*, profile: dict, course_id: str | None, candidates: l
         f"候选课程：{'、'.join(candidates) or '尚无候选'}",
         f"学习目标：{values['goal']}", f"现有基础：{values['basis']}",
         f"练习条件：{values['hardware']}", f"每周投入：{values['weekly_hours']}",
+        f"项目完成期限：{values['deadline']}",
         f"需要顾问确认的问题：{question}",
     ])

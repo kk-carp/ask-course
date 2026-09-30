@@ -137,6 +137,11 @@ def get_course_by_id(course_id: str) -> OfficialCourse | None:
     return None
 
 
+def expand_course_query(query: str) -> str:
+    """宽泛领域映射到官网使用的具体方向，不改变原始目标。"""
+    return query + " 机器人 四足 机械臂 巡检 机器狗" if "具身" in query else query
+
+
 def search_related_courses(
     question: str,
     *,
@@ -148,6 +153,9 @@ def search_related_courses(
     query = (question or "").strip()
     if not query or not catalog or limit <= 0:
         return []
+
+    # 官网标题常用具体机器人方向，所有推荐入口共用同一扩展。
+    query = expand_course_query(query)
 
     features = [_title_features(item.title) for item in catalog]
     document_frequency: dict[str, int] = {}

@@ -17,6 +17,7 @@ from backend.services.intent_router import classify_intent
 from backend.services.course_facts import fact_topic
 from backend.services.profile_extraction import extract_profile_updates
 from backend.services.question_decomposition import split_questions
+from backend.services.project_guidance import is_project_goal
 
 _log = logging.getLogger(__name__)
 
@@ -50,6 +51,10 @@ def understand_turn(question: str, *, page_course_id: str | None, profile: dict,
         course_id=selected,
         profile_updates=extract_profile_updates(question, profile, profile.get("_pending_field"), use_model=False),
     )
+    project_selection = (fallback.intent == "recommend" and is_project_goal(question)
+                         and not any(fact_topic(part) for part in fallback.questions))
+    if project_selection:
+        fallback.questions = [question]
     ordinal = re.search(r"第([一二三123])(?:门|个|款)", question)
     explicit = next((x.course_id for x in catalog if x.title in question or
                      re.search(rf"(?:课程\s*(?:ID\s*)?{re.escape(x.course_id)})(?!\d)", question, re.I)), None)
@@ -80,7 +85,9 @@ def understand_turn(question: str, *, page_course_id: str | None, profile: dict,
                 "intent（content/recommend/pay/commercial/advisor）；course_id（明确指代的已提供ID或null）；"
                 "compare_ids（仅明确要求比较时给已提供ID）；profile_updates（仅本轮明确表达或纠正的字段）。"
                 "画像字段 goal=具体技术/应用方向，basis=none/basic/experienced，hardware=yes/no/unknown，"
-                "weekly_hours=1到80整数。修正覆盖旧值，没说的字段不要填。"
+                "weekly_hours=1到80整数，deadline=访客明确说出的项目完成期限。"
+                "goal 同时保留领域和用途，例如具身智能、保研项目，不要只保留保研二字。"
+                "刚接触具身智能不表示编程零基础，不据此推断 basis。修正覆盖旧值，没说的字段不要填。"
                 "区分当前页面课程与正在咨询课程；第几门按候选顺序；指代不清不要猜。"
                 "公开优惠属于content，要求个别让价、退款、发票属于commercial。"
             )},
@@ -98,6 +105,8 @@ def understand_turn(question: str, *, page_course_id: str | None, profile: dict,
                 updates[key] = validate_answer(key, value)
             except ValueError:
                 continue
+        # 原话明确表达的字段优先，防止模型省略领域或遗漏短答。
+        updates.update(fallback.profile_updates)
         if not all(isinstance(x, str) and 0 < len(x.strip()) <= 2000 for x in parsed.questions):
             return fallback
         intent = parsed.intent if parsed.intent in {"content", "recommend", "pay", "commercial", "advisor"} else fallback.intent
@@ -105,7 +114,7 @@ def understand_turn(question: str, *, page_course_id: str | None, profile: dict,
         if fallback.intent == "content" and fact_topic(question):
             intent = "content"
         return Understanding(
-            questions=[question] if len(parsed.questions) == 1 else parsed.questions,
+            questions=[question] if project_selection or len(parsed.questions) == 1 else parsed.questions,
             intent=intent,
             course_id=fallback.course_id if reference_locked else parsed.course_id if parsed.course_id in allowed else fallback.course_id,
             profile_updates=updates,

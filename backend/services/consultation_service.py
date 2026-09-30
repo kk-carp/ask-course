@@ -15,15 +15,17 @@ from backend.services.approved_courses import (
     load_approved_courses,
     load_recommendable_courses,
 )
-from backend.services.course_catalog_service import search_related_courses
+from backend.services.course_catalog_service import expand_course_query, search_related_courses
 from backend.services.handoff_service import resolve_handoff
+from backend.services.project_guidance import is_project_goal, project_guidance, project_idea
 
-FIELDS = ("goal", "basis", "hardware", "weekly_hours")
+FIELDS = ("goal", "basis", "hardware", "weekly_hours", "deadline")
 QUESTIONS = {
     "goal": "你主要想通过课程完成什么？例如学习 ROS、机器人巡检或机械臂操作。",
     "basis": "你目前的编程和机器人基础如何？",
     "hardware": "你有可用于练习的机器人硬件吗？",
     "weekly_hours": "每周大约能投入多少小时？",
+    "deadline": "你希望什么时候完成项目？例如两个月内、暑假结束前或保研面试前。",
 }
 
 
@@ -97,6 +99,8 @@ def validate_answer(field: str, value: object) -> object:
         if not isinstance(value, str) or not 2 <= len(value.strip()) <= 200:
             raise ValueError("学习目标须为 2–200 字。")
         return value.strip()
+    if field == "deadline" and isinstance(value, str) and 2 <= len(value.strip()) <= 60:
+        return value.strip()
     if field == "basis" and isinstance(value, str) and value in {"none", "basic", "experienced"}:
         return value
     if field == "hardware" and isinstance(value, str) and value in {"yes", "no", "unknown"}:
@@ -107,15 +111,19 @@ def validate_answer(field: str, value: object) -> object:
 
 
 def _recommend(profile: dict, course_id: str | None) -> list[dict]:
-    goal = profile["goal"].casefold()
+    goal = expand_course_query(profile["goal"]).casefold()
     ranked: list[tuple[float, str, dict]] = []
+    excluded = set()
     approved = load_approved_courses()
     for item in approved:
         if "basis" in profile and basis_level(profile["basis"]) < basis_level(item.min_basis):
+            excluded.add(item.id)
             continue
         if item.requires_hardware and profile.get("hardware") in {"no", "unknown"}:
+            excluded.add(item.id)
             continue
         if "weekly_hours" in profile and profile["weekly_hours"] < item.min_weekly_hours:
+            excluded.add(item.id)
             continue
         matched = [word for word in item.goal_keywords if word.casefold() in goal]
         if not matched:
@@ -153,25 +161,41 @@ def _recommend(profile: dict, course_id: str | None) -> list[dict]:
     ranked.sort(key=lambda row: (-row[0], row[1]))
     recommendations = [entry for _, _, entry in ranked[:3]]
     # 已知不符合要求的课程不能从官网简介分支重新进入推荐。
-    selected = {item.id for item in approved}
+    selected = excluded | {item["id"] for item in recommendations}
+    approved_by_id = {item.id: item for item in approved}
     candidates = search_related_courses(
         profile["goal"], courses=load_recommendable_courses()
     )
+    exploratory = not recommendations and not candidates and is_project_goal(profile["goal"])
+    if exploratory:
+        # 仅展示已进入推荐池的选题方向；被硬性条件排除的审核课程不会回来。
+        candidates = search_related_courses(
+            "机械臂 四足 机器人 大模型", courses=load_recommendable_courses()
+        )
     for item in candidates:
         if len(recommendations) == 3:
             break
         if item.course_id in selected:
             continue
+        reviewed = approved_by_id.get(item.course_id)
+        reason = (
+            "还没有确定具体方向，可以先了解这门课的项目方向。" if exploratory
+            else "这门课与你的学习方向相关。"
+        )
+        if is_project_goal(profile["goal"]):
+            reason += "\n" + project_idea(item.title, item.description) + "依据官网课程介绍，选题和实施条件还需结合你的基础确认。"
+        else:
+            reason += (
+                f"官网介绍：{item.description or item.title}"
+                "\n目前的公开资料不足以确认个人适配条件，可以先了解课程内容和学习方式。"
+            )
         recommendations.append({
             "id": item.course_id,
             "title": item.title,
-            "reason": (
-                f"这门课与你的学习方向相关。官网介绍：{item.description or item.title}"
-                "\n目前的公开资料不足以确认个人适配条件，可以先了解课程内容和学习方式。"
-            ),
-            "audience": "",
-            "prerequisites": "",
-            "purchase_url": None,
+            "reason": reason,
+            "audience": reviewed.audience if reviewed else "",
+            "prerequisites": reviewed.prerequisites if reviewed else "",
+            "purchase_url": reviewed.purchase_url if reviewed else None,
             "source_url": f"https://www.arborseek.com/course/{item.course_id}",
             # 官网简介无法证明硬件门槛；先给相关课程，再让访客自愿补充条件。
             "missing_fields": ["hardware"] if (
@@ -201,6 +225,8 @@ def present(session: Session, row: VisitorConsultation) -> dict:
             status = "recommended"
             missing = recommendations[0]["missing_fields"]
             next_field = missing[0] if missing else None
+            if is_project_goal(profile["goal"]):
+                next_field = next((field for field in ("basis", "hardware", "weekly_hours", "deadline") if field not in profile), None)
         elif row.course_id and all(field in profile for field in ("goal", "basis", "hardware", "weekly_hours")):
             # 指定课程页上画像已齐但仍不匹配 → 转顾问，避免空推荐。
             status = "handoff"
@@ -232,6 +258,7 @@ def present(session: Session, row: VisitorConsultation) -> dict:
                 f"现有基础：{basis_label}",
                 f"练习硬件：{hardware_label}",
                 f"每周投入：{weekly_hours} 小时" if weekly_hours is not None else "每周投入：未填写",
+                f"项目完成期限：{profile.get('deadline', '未填写')}",
             ]
         )
     return {
@@ -244,6 +271,7 @@ def present(session: Session, row: VisitorConsultation) -> dict:
         "recommendations": recommendations,
         "owner": owner,
         "summary": summary,
+        "guidance": project_guidance(profile) if is_project_goal(profile.get("goal", "")) else None,
     }
 
 

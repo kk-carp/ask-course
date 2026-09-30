@@ -18,6 +18,8 @@ from backend.services.course_catalog_service import (
 )
 from backend.services.handoff_service import resolve_handoff
 from backend.services.qa_service import AskResult
+from backend.services.project_guidance import is_project_goal
+from backend.services.course_facts import fact_topic
 
 _log = logging.getLogger("backend.intent_router")
 
@@ -95,7 +97,8 @@ def classify_intent(question: str) -> Intent:
         return Intent.advisor
     if _PAY.search(text):
         return Intent.pay
-    if text in _UNDIRECTED_RECOMMEND or _RECOMMEND.search(text) or _EMPLOYMENT_GOAL.search(text):
+    if (text in _UNDIRECTED_RECOMMEND or _RECOMMEND.search(text) or _EMPLOYMENT_GOAL.search(text)
+            or (is_project_goal(text) and fact_topic(text) is None)):
         return Intent.recommend
     return Intent.content
 
@@ -130,11 +133,8 @@ def recommend_has_direction(question: str) -> bool:
 
 def recommend_catalog_hits(question: str) -> bool:
     """可推荐目录是否对当前问句有命中。"""
-    search_query = question or ""
-    if re.search(r"具身", search_query):
-        search_query = f"{search_query} 机器人 四足 机械臂 巡检 机器狗"
     return bool(
-        search_related_courses(search_query, courses=load_recommendable_courses())
+        search_related_courses(question, courses=load_recommendable_courses())
     )
 
 
@@ -157,6 +157,8 @@ def should_enter_guest_consultation(
             return True
         return bool(intent is Intent.content and looks_like_profile_reply)
     if intent is Intent.recommend:
+        if is_project_goal(question):
+            return True
         if not recommend_has_direction(question):
             return True
         if _EMPLOYMENT_GOAL.search(question or ""):
@@ -258,11 +260,7 @@ def handle_routed_turn(
         )
 
     recommendable = load_recommendable_courses()
-    search_query = question
-    if re.search(r"具身", question or ""):
-        # 标题里少见「具身」：用常见具身方向词扩召回，仍限制在可推荐池。
-        search_query = f"{question} 机器人 四足 机械臂 巡检 机器狗"
-    matches = search_related_courses(search_query, courses=recommendable)
+    matches = search_related_courses(question, courses=recommendable)
     if not matches:
         return RoutedTurn(
             handled=True,

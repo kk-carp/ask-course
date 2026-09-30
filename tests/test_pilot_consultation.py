@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -238,6 +239,25 @@ def test_uncertain_hardware_does_not_recommend_hardware_course(monkeypatch):
     assert result["status"] == "handoff"
     assert result["recommendations"] == []
     assert seen["course_id"] == "43"
+
+
+@pytest.mark.parametrize("basis,hardware,hours", [("none", "yes", 4), ("basic", "no", 4), ("basic", "yes", 1)])
+def test_project_exploration_does_not_restore_ineligible_courses(monkeypatch, basis, hardware, hours):
+    from dataclasses import replace
+    from backend.services.consultation_service import _recommend
+
+    monkeypatch.setattr("backend.services.consultation_service.load_approved_courses", lambda: (replace(COURSE, requires_hardware=True),))
+    monkeypatch.setattr("backend.services.consultation_service.load_recommendable_courses", lambda: (OfficialCourse("43", COURSE.title, "巡检演示"),))
+    assert _recommend({"goal": "保研项目", "basis": basis, "hardware": hardware, "weekly_hours": hours}, None) == []
+
+
+def test_project_exploration_can_show_eligible_approved_course(monkeypatch):
+    from backend.services.consultation_service import _recommend
+
+    monkeypatch.setattr("backend.services.consultation_service.load_approved_courses", lambda: (COURSE,))
+    monkeypatch.setattr("backend.services.consultation_service.load_recommendable_courses", lambda: (OfficialCourse("43", COURSE.title, "巡检演示"),))
+    result = _recommend({"goal": "保研项目", "basis": "basic", "hardware": "no", "weekly_hours": 4}, None)
+    assert result[0]["id"] == "43" and "先了解" in result[0]["reason"]
 
 
 def test_recommendable_course_uses_official_description_without_purchase(monkeypatch):
