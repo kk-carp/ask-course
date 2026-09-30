@@ -67,6 +67,8 @@ def understand_turn(question: str, *, page_course_id: str | None, profile: dict,
         result = complete_chat([
             {"role": "system", "content": (
                 "你是课程咨询语义解析器，仅返回 JSON。不要回答问题、选课、编造事实或链接。"
+                "questions 必须是访客本轮表达的请求或问题，绝不能生成你想追问访客的问题。"
+                "画像陈述原样保留为一个请求。例：访客说‘想学机械臂，没硬件’时，questions=[原话]，intent=recommend。"
                 "字段 questions（最多5个可独立回答的问题，保留目标与否定，画像陈述不拆开）；"
                 "intent（content/recommend/pay/commercial/advisor）；course_id（明确指代的已提供ID或null）；"
                 "compare_ids（仅明确要求比较时给已提供ID）；profile_updates（仅本轮明确表达或纠正的字段）。"
@@ -99,6 +101,6 @@ def understand_turn(question: str, *, page_course_id: str | None, profile: dict,
             compare_ids=[x for x in parsed.compare_ids if x in allowed],
             llm_called=True, prompt_tokens=result.usage.prompt_tokens, completion_tokens=result.usage.completion_tokens,
         )
-    except Exception:
-        _log.warning("turn understanding unavailable; using explicit rules")
+    except Exception as exc:
+        _log.warning("turn understanding unavailable (%s); using explicit rules", type(exc).__name__)
         return fallback
