@@ -123,9 +123,7 @@
     }
     card.append(el("strong", item.title || ""));
     if (item.description) card.append(el("p", item.description));
-    if (item.reason) card.append(el("p", `推荐依据：${item.reason}`));
-    for (const text of item.requirements || []) card.append(el("small", text));
-    for (const text of item.pending || []) card.append(el("small", `需确认：${text}`));
+    if (item.reason) card.append(el("p", `推荐理由：${item.reason}`));
     if (href) contactLink(card, href, "查看官网课程详情");
     if (item.purchase_url) card.append(button("去官网购买页", () => purchase(item.id), "as-primary"));
     return card;

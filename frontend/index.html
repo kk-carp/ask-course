@@ -483,9 +483,9 @@
             : "";
           const blurb = item.description
             ? `<small>${escapeHtml(item.description)}</small>`
-            : (item.id ? `<small>课程 ID ${escapeHtml(item.id)}</small>` : "");
-          const facts = [item.reason ? `推荐依据：${item.reason}` : "", ...(item.requirements || []), ...(item.pending || []).map(x => `需确认：${x}`)].filter(Boolean).map(x => `<small>${escapeHtml(x)}</small>`).join("");
-          return `<div class="course-card${cover ? "" : " no-cover"}">${cover}<div class="card-body"><strong>${escapeHtml(item.title || "")}</strong>${blurb}${facts}<div class="card-actions">${detail ? `<a href="${escapeHtml(detail)}" target="_blank" rel="noopener noreferrer">查看官网课程详情</a>` : ""}${item.purchase_url ? `<button type="button" class="ghost" data-buy="${escapeHtml(item.id)}">去官网购买页</button>` : ""}</div></div></div>`;
+            : "";
+          const reason = item.reason ? `<small>推荐理由：${escapeHtml(item.reason)}</small>` : "";
+          return `<div class="course-card${cover ? "" : " no-cover"}">${cover}<div class="card-body"><strong>${escapeHtml(item.title || "")}</strong>${blurb}${reason}<div class="card-actions">${detail ? `<a href="${escapeHtml(detail)}" target="_blank" rel="noopener noreferrer">查看官网课程详情</a>` : ""}${item.purchase_url ? `<button type="button" class="ghost" data-buy="${escapeHtml(item.id)}">去官网购买页</button>` : ""}</div></div></div>`;
         }).join("")}</div>`;
       }
       if (payload.sources && payload.sources.length) {
