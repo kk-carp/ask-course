@@ -10,7 +10,7 @@
   if (!courseId || !/^\d{1,12}$/.test(courseId)) return;
   const base = new URL("./", script.src);
   const api = (path) => new URL(path.replace(/^\//, ""), base).toString();
-  const key = `arborseek-consultation:${courseId}`;
+  const key = "arborseek-consultation";
   const DEFAULT_PROMPTS = [
     "推荐一门适合我的课程",
     "按我的基础帮我选课",

@@ -54,10 +54,10 @@ def get_or_create_dialogue(
     session: Session, visitor_id: str, course_id: str | None,
     conversation_id: str | None = None,
 ) -> VisitorConsultation:
-    """自由问答与问诊复用同一访客状态；指定 ID 必须属于当前访客和课程。"""
+    """自由问答与问诊复用访客状态；指定 ID 校验归属和有效期，支持跨页面。"""
     if conversation_id:
         row = load_owned(session, conversation_id, visitor_id)
-        if row is None or row.course_id != course_id:
+        if row is None:
             raise ValueError("会话不存在或已过期")
         return row
     row = session.scalar(

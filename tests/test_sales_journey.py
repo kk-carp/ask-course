@@ -100,6 +100,24 @@ def test_old_hardware_question_accepts_bare_no(sales_chat):
         assert json.loads(session.get(VisitorConsultation, cid).profile_json)["hardware"] == "no"
 
 
+def test_ordered_candidates_comparison_and_cross_page_continue(sales_chat):
+    client, factory = sales_chat
+    first = send(client, "想学具身智能，推荐课程", course_id="43")
+    cid = first["conversation_id"]
+    ids = [item["id"] for item in first["related_courses"]]
+    assert len(ids) >= 2
+    selected = send(client, "第二门价格多少？", cid, course_id="42")
+    assert selected["conversation_id"] == cid
+    with factory() as session:
+        saved = json.loads(session.get(VisitorConsultation, cid).profile_json)
+        assert saved["_selected_course_id"] == ids[1]
+        assert saved["_candidate_course_ids"] == ids
+    comparison = send(client, "这两门有什么区别？", cid, course_id="42")
+    assert comparison["intent"] == "compare"
+    assert [item["id"] for item in comparison["related_courses"]] == ids
+    assert comparison["fact_sources"]
+
+
 def test_explicit_handoff_uses_last_recommended_course(sales_chat, monkeypatch):
     client, _ = sales_chat
     seen = {}

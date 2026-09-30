@@ -171,9 +171,12 @@ def handle_routed_turn(
     question: str,
     *,
     course_id: str | None = None,
+    intent_override: str | None = None,
 ) -> RoutedTurn:
     """按意图给出固定回复或声明交给 RAG（handled=False）。"""
     intent = classify_intent(question)
+    if intent is Intent.content and intent_override in {item.value for item in Intent}:
+        intent = Intent(intent_override)
     explicit = (course_id or "").strip() or None
     _log.info("intent=%s course_id=%s", intent.value, explicit or "")
 

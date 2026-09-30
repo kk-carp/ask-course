@@ -54,8 +54,8 @@ from backend.services.public_course_info import (
     public_fact_topic,
 )
 from backend.services.qa_service import AskResult, answer_question
-from backend.services.question_decomposition import split_questions
 from backend.services.course_facts import answer_course_fact
+from backend.services.turn_understanding import Understanding, understand_turn
 
 _log = logging.getLogger("backend.ask_orchestrator")
 
@@ -140,7 +140,7 @@ def apply_handoff(
 
 
 def _prepare_guest_dialogue(
-    visitor_id: str, payload: AskRequest, *, intent: Intent
+    visitor_id: str, payload: AskRequest, *, intent: Intent, understanding: Understanding | None = None
 ) -> tuple[str, list[tuple[str, str]], dict | None, str | None]:
     db.init_engine()
     if db.SessionLocal is None:
@@ -182,15 +182,19 @@ def _prepare_guest_dialogue(
                 ),
                 None,
             )
+        updates = understanding.profile_updates.copy() if understanding else extract_profile_updates(payload.question, profile, pending, use_model=False)
+        if understanding and understanding.course_id:
+            profile["_selected_course_id"] = understanding.course_id
         selection = should_enter_guest_consultation(
             intent,
             payload.question,
             pending_field=pending,
-            looks_like_profile_reply=looks_like_profile(payload.question, pending),
+            looks_like_profile_reply=looks_like_profile(payload.question, pending) or (
+                bool(updates) and not re.search(r"[？?]|吗|什么|怎么|多少|多久|能否", payload.question)
+            ),
         )
         preview = None
         if selection:
-            updates = extract_profile_updates(payload.question, profile, pending)
             # 无方向开场不应把开场句写成 goal。
             if fresh_undirected:
                 updates.pop("goal", None)
@@ -208,6 +212,7 @@ def _prepare_guest_dialogue(
         else:
             # 课程事实 / 有方向列课等会离开问诊槽位，避免下一轮误吃短答。
             profile.pop("_pending_field", None)
+            profile.update(updates)
         row.profile_json = json.dumps(profile, ensure_ascii=False)
         session.commit()
         return (
@@ -366,10 +371,63 @@ def _enrich_related(related: list[RelatedCourse]) -> list[RelatedCourse]:
 
 
 def run_ask_turn(payload: AskRequest, identity: AskIdentity) -> AskResponse:
-    """一轮含多个问题时逐项回答；敏感问题不覆盖其他回答。"""
-    questions = split_questions(payload.question)
+    """每轮只解析一次，统一保存历史、候选顺序和本次理解的模型用量。"""
+    profile, history = {}, []
+    if identity.visitor_id and payload.conversation_id:
+        db.init_engine()
+        with db.SessionLocal() as session:
+            row = load_owned(session, str(payload.conversation_id), identity.visitor_id)
+            if row is None:
+                raise HTTPException(status_code=404, detail="会话不存在或已过期")
+            profile, history = json.loads(row.profile_json), dialogue_history(row)
+            if not profile.get("_pending_field") and history and history[-1][0] == "assistant":
+                profile["_pending_field"] = next((field for field, question in QUESTIONS.items() if history[-1][1].endswith(question)), None)
+    understanding = understand_turn(payload.question, page_course_id=payload.course_id,
+                                    profile=profile, history=history, catalog=load_recommendable_courses())
+    if len(understanding.compare_ids) >= 2:
+        dialogue_id = None
+        if identity.visitor_id:
+            dialogue_id, _, _, _ = _prepare_guest_dialogue(identity.visitor_id, payload, intent=Intent.content, understanding=understanding)
+        cards, blocks, evidence = [], [], []
+        catalog = {item.course_id: item for item in load_recommendable_courses()}
+        for key in understanding.compare_ids:
+            if key not in catalog:
+                continue
+            course = catalog[key]
+            cards.append(related_course_card(course))
+            lines = [f"「{course.title}」"]
+            for query in ("课程目录", "基础要求", "硬件要求"):
+                fact = answer_course_fact(query, key)
+                if fact:
+                    lines.append(f"{query}：{fact[0][:400]}")
+                    evidence.extend(fact[1])
+            blocks.append("\n".join(lines))
+        response = AskResponse(answer="\n\n".join(blocks) or "请先选定需要比较的课程。",
+                               hit=bool(evidence), related_courses=_enrich_related(cards), fact_sources=evidence,
+                               conversation_id=UUID(dialogue_id) if dialogue_id else None, intent="compare")
+    else:
+        response = _run_questions(payload, identity, understanding)
+    response.llm_called = response.llm_called or understanding.llm_called
+    response.prompt_tokens += understanding.prompt_tokens
+    response.completion_tokens += understanding.completion_tokens
+    if identity.visitor_id and response.conversation_id:
+        key = str(response.conversation_id)
+        _remember_guest_dialogue(identity.visitor_id, key, payload.question, response.answer)
+        if response.related_courses and response.intent in {"recommend", "compare"}:
+            with db.SessionLocal() as session:
+                row = load_owned(session, key, identity.visitor_id)
+                if row:
+                    saved = json.loads(row.profile_json)
+                    saved["_candidate_course_ids"] = [item.id for item in response.related_courses]
+                    row.profile_json = json.dumps(saved, ensure_ascii=False)
+                    session.commit()
+    return response
+
+
+def _run_questions(payload: AskRequest, identity: AskIdentity, understanding: Understanding) -> AskResponse:
+    questions = understanding.questions
     if len(questions) == 1:
-        return _run_single_question(payload, identity)
+        return _run_single_question(payload.model_copy(update={"question": questions[0]}), identity, record_history=False, understanding=understanding)
 
     responses: list[AskResponse] = []
     failures: list[HTTPException] = []
@@ -381,6 +439,7 @@ def run_ask_turn(payload: AskRequest, identity: AskIdentity) -> AskResponse:
         try:
             result = _run_single_question(
                 part, identity, record_history=False, context_question=payload.question,
+                understanding=understanding,
             )
         except HTTPException as exc:
             if exc.status_code not in {502, 503}:
@@ -420,16 +479,13 @@ def run_ask_turn(payload: AskRequest, identity: AskIdentity) -> AskResponse:
         completion_tokens=sum(result.completion_tokens for result in responses),
         fact_sources=[source for result in responses for source in result.fact_sources],
     )
-    if identity.user_id is None and identity.visitor_id and conversation_id:
-        _remember_guest_dialogue(
-            identity.visitor_id, str(conversation_id), payload.question, response.answer,
-        )
     return response
 
 
 def _run_single_question(
     payload: AskRequest, identity: AskIdentity, *, record_history: bool = True,
     context_question: str | None = None,
+    understanding: Understanding | None = None,
 ) -> AskResponse:
     """执行一个问题；拆分出的问答由调用方合并后保存访客历史。"""
     allowed_spaces = identity.allowed_spaces
@@ -438,6 +494,8 @@ def _run_single_question(
     visitor_id = identity.visitor_id
 
     intent = classify_intent(payload.question)
+    if intent is Intent.content and understanding and len(understanding.questions) == 1:
+        intent = Intent(understanding.intent)
     dialogue_id: str | None = None
     visitor_history: list[tuple[str, str]] = []
     dialogue_course_id = payload.course_id
@@ -445,7 +503,7 @@ def _run_single_question(
     if user_id is None and visitor_id:
         try:
             dialogue_id, visitor_history, preview, dialogue_course_id = (
-                _prepare_guest_dialogue(visitor_id, payload, intent=intent)
+                _prepare_guest_dialogue(visitor_id, payload, intent=intent, understanding=understanding)
             )
         except ServiceUnavailableError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -473,7 +531,8 @@ def _run_single_question(
             if dialogue_id and visitor_id:
                 _bind_selected_course(visitor_id, dialogue_id, dialogue_course_id)
 
-    routed = handle_routed_turn(payload.question, course_id=dialogue_course_id)
+    routed = handle_routed_turn(payload.question, course_id=dialogue_course_id,
+                                intent_override=understanding.intent if understanding and len(understanding.questions) == 1 else None)
     if routed.handled:
         _log.info("ask short-circuit intent=%s", routed.intent.value)
         result = routed.result

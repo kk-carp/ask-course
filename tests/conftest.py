@@ -8,6 +8,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def isolated_course_facts(tmp_path, monkeypatch):
     from backend.services import course_facts
+    from backend.config import settings
 
     data = tmp_path / "data"
     data.mkdir()
@@ -25,3 +26,4 @@ def isolated_course_facts(tmp_path, monkeypatch):
     (data / "course_facts.json").write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
     monkeypatch.setattr(course_facts, "ROOT", tmp_path)
     monkeypatch.setattr(course_facts, "_cache", {})
+    monkeypatch.setattr(settings, "chat_api_key", "")

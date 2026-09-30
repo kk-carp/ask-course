@@ -624,7 +624,6 @@
       const btn = event.target.closest(".course");
       if (!btn) return;
       state.courseId = btn.dataset.id;
-      state.conversationId = null;
       renderCourses();
       renderPrompts();
     });

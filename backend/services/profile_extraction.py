@@ -72,11 +72,11 @@ def _rules(text: str) -> dict:
     return found
 
 
-def extract_profile_updates(text: str, current: dict, expected_field: str | None = None) -> dict:
+def extract_profile_updates(text: str, current: dict, expected_field: str | None = None, *, use_model: bool = True) -> dict:
     """模型仅做保守槽位提取；失败时按明确措辞提取，未知项继续追问。"""
     proposal = {**_contextual_reply(text, expected_field), **_rules(text)}
     goal_statement = _GOAL_STATEMENT.search(text)
-    if settings.chat_api_key and not proposal:
+    if use_model and settings.chat_api_key and not proposal:
         from backend.infra.generate import complete_chat
 
         try:
