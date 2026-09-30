@@ -542,7 +542,9 @@
             if (line.startsWith("data:")) data += line.slice(5).trim();
           }
           if (data) {
-            try { onEvent(eventName, JSON.parse(data)); } catch (_) { /* ignore malformed */ }
+            let parsed;
+            try { parsed = JSON.parse(data); } catch (_) { continue; }
+            onEvent(eventName, parsed);
           }
           eventName = "message";
         }
@@ -562,6 +564,7 @@
       };
       let streamed = "";
       let latest = { hit: null, sources: [], owner: null };
+      const parts = [];
       try {
         const res = await fetch("/ask/stream", {
           method: "POST",
@@ -574,17 +577,25 @@
           throw new Error(detail.detail || `提问失败（${res.status}）`);
         }
         await readSse(res, (name, data) => {
+          if (name === "progress") wrap.querySelector(".a").textContent = data.message;
+          if (name === "part") {
+            parts[data.index - 1] = `${data.index}. ${data.question}\n${data.answer}`;
+            streamed = parts.filter(Boolean).join("\n\n");
+          }
           if (name === "meta") latest = { ...latest, ...data };
           if (name === "delta") streamed += data.text || "";
           if (name === "final") {
+            streamed = "";
             latest = { ...latest, ...data };
             state.conversationId = data.conversation_id || state.conversationId;
           }
           if (name === "error") throw new Error(data.detail || "问答失败");
-          paintTurn(wrap, latest, streamed || latest.answer);
+          if (name !== "progress") paintTurn(wrap, latest, streamed || latest.answer);
         });
       } catch (err) {
         wrap.querySelector(".a").textContent = err.message || "提问失败";
+        const retry = document.createElement("button"); retry.textContent = "重试本次提问";
+        retry.type = "button"; retry.addEventListener("click", () => ask(question)); wrap.querySelector(".a").append(retry);
       } finally {
         state.asking = false;
         $("send").disabled = false;

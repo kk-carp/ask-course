@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     embed_model: str = "BAAI/bge-m3"
     embedding_dim: int = 1024
     embed_batch_size: int = 8
+    embed_cpu_threads: int = 2
 
     retrieve_top_k: int = 5
     retrieve_min_score: float = 0.5

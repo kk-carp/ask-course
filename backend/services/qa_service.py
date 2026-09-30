@@ -1,13 +1,14 @@
 """课程问答：仅基于召回正文生成；未命中不调用模型，来源只来自召回记录。"""
 
 import logging
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass
 from uuid import UUID
 from backend import db
 from backend.errors import ServiceUnavailableError, UpstreamServiceError
 from backend.infra.embed import encode_query, is_loaded
-from backend.infra.metrics import record_ask_outcome
+from backend.infra.metrics import record_ask_outcome, record_latency
 from backend.infra.request_context import get_request_id
 from backend.infra.generate import ChatResult, generate_answer, generate_answer_stream
 from backend.infra.retrieve import RetrievedChunk, run_retrieval
@@ -113,11 +114,16 @@ def _retrieve(
         return []
     query_text = question
     query_text = expand_followup_query(query_text, previous_user_question)
+    started = time.perf_counter()
     query_vector = encode_query(query_text)
-    return run_retrieval(
+    record_latency("embedding", (time.perf_counter() - started) * 1000)
+    started = time.perf_counter()
+    retrieved = run_retrieval(
         query_text=query_text, query_vector=query_vector, allowed_spaces=allowed_spaces,
         course_id=course_id,
     )
+    record_latency("retrieval_and_rerank", (time.perf_counter() - started) * 1000)
+    return retrieved
 
 
 def _ask_result_payload(result: AskResult) -> dict:

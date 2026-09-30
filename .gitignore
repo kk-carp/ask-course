@@ -21,3 +21,7 @@ data/course_content/
 data/course_facts.json
 data/course_catalog.json
 data/eval/pilot-results*.json
+data/eval/pilot_gold.jsonl
+backups/
+*.dump
+data/eval/load-results*.json

@@ -23,7 +23,6 @@ python-pptx==1.0.2
 pypdf==6.14.2
 
 # --- 检索内核：向量 + 重排 + 中文分词 ---
-sentence-transformers==4.1.0
 jieba==0.42.1
 
 # --- 对话模型（OpenAI 兼容；P0 指向 openai.arborseek.com 网关） ---

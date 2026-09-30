@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from backend import db
 from backend.models import FunnelEvent
 
-from backend.infra.metrics import snapshot
+from backend.infra.metrics import snapshot, latency_snapshot
 from backend.schemas import MetricsResponse
 from backend.services.auth_service import can_manage_documents, load_auth_context
 
@@ -14,7 +14,7 @@ router = APIRouter(tags=["metrics"])
 
 
 @router.get("/metrics", response_model=MetricsResponse)
-async def get_metrics(request: Request) -> MetricsResponse:
+def get_metrics(request: Request) -> MetricsResponse:
     context = load_auth_context(request)
     if context is None:
         raise HTTPException(status_code=401, detail="未登录")
@@ -41,11 +41,12 @@ async def get_metrics(request: Request) -> MetricsResponse:
         prompt_tokens_total=data.prompt_tokens_total,
         completion_tokens_total=data.completion_tokens_total,
         funnel_events_30d=funnel,
+        latency_ms=latency_snapshot(),
     )
 
 
 @router.get("/metrics/funnel")
-async def get_funnel_metrics(request: Request) -> dict:
+def get_funnel_metrics(request: Request) -> dict:
     context = load_auth_context(request)
     if context is None:
         raise HTTPException(status_code=401, detail="未登录")

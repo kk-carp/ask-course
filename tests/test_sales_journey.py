@@ -248,7 +248,8 @@ def test_multi_question_stream_uses_individual_answers(sales_chat, monkeypatch, 
     })
     assert response.status_code == 200, response.text
     events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]
-    result = next(event for event in events if "answer" in event)
+    result = [event for event in events if "answer" in event][-1]
+    assert response.text.count("event: part") == 2
     assert result["intent"] == "multi_question"
     assert "MoveIt2" in result["answer"]
     assert "联系方式" in result["answer"]

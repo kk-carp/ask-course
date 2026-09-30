@@ -1,0 +1,15 @@
+.git
+.venv
+.uv-cache
+.pytest_cache
+.ruff_cache
+.agents
+.codex
+.env*
+cookies.txt
+docs
+data
+tests
+**/__pycache__
+**/*.log
+backups

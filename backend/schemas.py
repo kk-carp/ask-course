@@ -155,3 +155,4 @@ class MetricsResponse(BaseModel):
     prompt_tokens_total: int
     completion_tokens_total: int
     funnel_events_30d: dict[str, int] = Field(default_factory=dict)
+    latency_ms: dict[str, dict[str, float]] = Field(default_factory=dict)

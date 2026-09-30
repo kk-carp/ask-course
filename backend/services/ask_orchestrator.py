@@ -387,6 +387,10 @@ def _enrich_related(related: list[RelatedCourse]) -> list[RelatedCourse]:
 
 
 def run_ask_turn(payload: AskRequest, identity: AskIdentity) -> AskResponse:
+    return next(data for name, data in iter_ask_turn(payload, identity) if name == "final")
+
+
+def iter_ask_turn(payload: AskRequest, identity: AskIdentity):
     """每轮只解析一次，统一保存历史、候选顺序和本次理解的模型用量。"""
     profile, history = {}, []
     if identity.visitor_id and payload.conversation_id:
@@ -422,7 +426,11 @@ def run_ask_turn(payload: AskRequest, identity: AskIdentity) -> AskResponse:
                                hit=bool(evidence), related_courses=_enrich_related(cards), fact_sources=evidence,
                                conversation_id=UUID(dialogue_id) if dialogue_id else None, intent="compare")
     else:
-        response = _run_questions(payload, identity, understanding)
+        for name, data in _run_questions(payload, identity, understanding):
+            if name == "final":
+                response = data
+            else:
+                yield name, data
     response.llm_called = response.llm_called or understanding.llm_called
     response.prompt_tokens += understanding.prompt_tokens
     response.completion_tokens += understanding.completion_tokens
@@ -447,13 +455,14 @@ def run_ask_turn(payload: AskRequest, identity: AskIdentity) -> AskResponse:
     elif response.owner:
         response.handoff_summary = build_handoff_summary(profile={}, course_id=payload.course_id,
                                                         candidates=[x.id for x in response.related_courses], question=payload.question)
-    return response
+    yield "final", response
 
 
-def _run_questions(payload: AskRequest, identity: AskIdentity, understanding: Understanding) -> AskResponse:
+def _run_questions(payload: AskRequest, identity: AskIdentity, understanding: Understanding):
     questions = understanding.questions
     if len(questions) == 1:
-        return _run_single_question(payload.model_copy(update={"question": questions[0]}), identity, record_history=False, understanding=understanding)
+        yield "final", _run_single_question(payload.model_copy(update={"question": questions[0]}), identity, record_history=False, understanding=understanding)
+        return
 
     responses: list[AskResponse] = []
     failures: list[HTTPException] = []
@@ -478,6 +487,7 @@ def _run_questions(payload: AskRequest, identity: AskIdentity, understanding: Un
             )
         conversation_id = result.conversation_id or conversation_id
         responses.append(result)
+        yield "part", {"index": len(responses), "question": question, **result.model_dump(mode="json")}
 
     if len(failures) == len(questions):
         raise failures[0]
@@ -505,7 +515,7 @@ def _run_questions(payload: AskRequest, identity: AskIdentity, understanding: Un
         completion_tokens=sum(result.completion_tokens for result in responses),
         fact_sources=[source for result in responses for source in result.fact_sources],
     )
-    return response
+    yield "final", response
 
 
 def _run_single_question(

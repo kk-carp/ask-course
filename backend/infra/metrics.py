@@ -1,9 +1,11 @@
 """进程内问答计数：当前进程启动后累计，重启清零。不含问题正文。"""
 
 from dataclasses import dataclass
+from collections import defaultdict, deque
 import threading
 
 _lock = threading.Lock()
+_latencies = defaultdict(lambda: deque(maxlen=500))
 _counters = {
     "ask_total": 0,
     "ask_hit": 0,
@@ -34,6 +36,22 @@ def reset() -> None:
     with _lock:
         for key in _counters:
             _counters[key] = 0
+        _latencies.clear()
+
+
+def record_latency(stage: str, milliseconds: float) -> None:
+    with _lock:
+        _latencies[stage].append(milliseconds)
+
+
+def latency_snapshot() -> dict[str, dict[str, float]]:
+    with _lock:
+        result = {}
+        for stage, samples in _latencies.items():
+            values = sorted(samples)
+            result[stage] = {"samples": len(values), "p50": round(values[(len(values) - 1) // 2], 1),
+                             "p95": round(values[min(len(values) - 1, int(len(values) * .95))], 1)}
+        return result
 
 
 def snapshot() -> MetricsSnapshot:

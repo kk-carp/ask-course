@@ -2,10 +2,12 @@
 
 from collections.abc import Iterator
 from dataclasses import dataclass
+import time
 from openai import APIConnectionError, APIStatusError, OpenAI
 from backend.config import settings
 from backend.errors import UpstreamServiceError
 from backend.infra.retrieve import RetrievedChunk
+from backend.infra.metrics import record_latency
 
 ChatMessages = list[dict[str, object]]
 
@@ -54,7 +56,7 @@ def _create_chat_completion(
     messages: ChatMessages, *, temperature: float = 0.1, stream: bool = False
 ):
     client = OpenAI(
-        base_url=settings.chat_base_url, api_key=settings.chat_api_key, timeout=30.0
+        base_url=settings.chat_base_url, api_key=settings.chat_api_key, timeout=30.0, max_retries=0
     )
     payload: dict[str, object] = {
         "model": settings.chat_model,
@@ -73,7 +75,9 @@ def _create_chat_completion(
 
 def complete_chat(messages: ChatMessages, *, temperature: float = 0.1) -> ChatResult:
     """调用 DeepSeek 完成一轮对话；失败统一为上游错误，不当成知识库未命中。"""
+    started = time.perf_counter()
     response = _create_chat_completion(messages, temperature=temperature)
+    record_latency("model", (time.perf_counter() - started) * 1000)
     message = response.choices[0].message.content if response.choices else None
     answer = (message or "").strip()
     if not answer:

@@ -2,6 +2,7 @@
 
 import logging
 import re
+import time
 from contextvars import ContextVar, Token
 from uuid import uuid4
 
@@ -51,6 +52,7 @@ class RequestIdMiddleware:
         request_id = normalize_request_id(incoming)
         token = bind_request_id(request_id)
         status_code = 500
+        started = time.perf_counter()
 
         async def send_wrapper(message: Message) -> None:
             nonlocal status_code
@@ -67,10 +69,11 @@ class RequestIdMiddleware:
             method = scope.get("method", "")
             path = scope.get("path", "")
             _access_log.info(
-                "request_id=%s method=%s path=%s status=%s",
+                "request_id=%s method=%s path=%s status=%s duration_ms=%.1f",
                 request_id,
                 method,
                 path,
                 status_code,
+                (time.perf_counter() - started) * 1000,
             )
             reset_request_id(token)

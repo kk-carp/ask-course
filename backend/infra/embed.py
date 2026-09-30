@@ -25,8 +25,11 @@ def load_model() -> None:
         if _model is not None:
             return
         try:
+            import torch
             from sentence_transformers import SentenceTransformer
 
+            if not torch.cuda.is_available():
+                torch.set_num_threads(settings.embed_cpu_threads)
             _log.info("loading SentenceTransformer(%s) — first run may download weights", settings.embed_model)
             _model = SentenceTransformer(settings.embed_model)
             _log.info("embed model ready")

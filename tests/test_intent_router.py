@@ -76,7 +76,7 @@ def test_employment_profile_skips_knowledge_miss_and_handoff(monkeypatch) -> Non
     monkeypatch.setattr(db, "init_engine", lambda: engine)
     monkeypatch.setattr(settings, "chat_api_key", "")
     monkeypatch.setattr(
-        "backend.routes.ask.iter_answer_events",
+        "backend.services.ask_orchestrator.answer_question",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected knowledge retrieval")),
     )
     response = TestClient(app).post(

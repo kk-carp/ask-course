@@ -1,6 +1,7 @@
 """健康检查：数据库可连且向量模型已加载则 ready。"""
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from backend import db
@@ -11,7 +12,7 @@ router = APIRouter(tags=["health"])
 
 
 @router.get("/health", response_model=HealthResponse)
-async def health() -> HealthResponse:
+def health() -> HealthResponse:
     """检查 API、数据库连通性与 BGE-M3 加载状态，不调用 DeepSeek。"""
     database_ok = False
     try:
@@ -28,3 +29,9 @@ async def health() -> HealthResponse:
         database=database_ok,
         embedding_loaded=is_loaded(),
     )
+
+
+@router.get("/ready")
+def ready() -> JSONResponse:
+    result = health()
+    return JSONResponse(result.model_dump(), status_code=200 if result.database and result.embedding_loaded else 503)

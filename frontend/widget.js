@@ -55,6 +55,31 @@
     return response.status === 204 ? null : response.json();
   }
   const event = (name) => json("widget/events", "POST", { course_id: courseId, event_name: name }).catch(() => {});
+  async function streamAsk(payload, onPart) {
+    const response = await fetch(api("ask/stream"), {
+      method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+    });
+    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || "咨询暂时不可用");
+    const reader = response.body.getReader(); const decoder = new TextDecoder();
+    let buffer = "", result;
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split("\n\n"); buffer = blocks.pop() || "";
+      for (const block of blocks) {
+        const name = block.split("\n").find(x => x.startsWith("event:"))?.slice(6).trim();
+        const raw = block.split("\n").filter(x => x.startsWith("data:")).map(x => x.slice(5)).join("\n");
+        if (!raw) continue;
+        const data = JSON.parse(raw);
+        if (name === "part") onPart(data);
+        if (name === "final") result = data;
+        if (name === "error") throw new Error(data.detail || "咨询暂时不可用");
+      }
+    }
+    if (!result) throw new Error("回答未完成，请重试。");
+    return result;
+  }
   function line(text, className) {
     const node = el("div", text, className);
     body.append(node);
@@ -139,13 +164,18 @@
     line(question, "as-user");
     clear(inputArea);
     event("question");
+    const pending = line("正在理解问题并查询课程资料…", "as-agent");
+    const parts = [];
     try {
-      const result = await json("ask", "POST", { question, course_id: courseId, channel: "course_page", conversation_id: conversationId });
+      const result = await streamAsk({ question, course_id: courseId, channel: "course_page", conversation_id: conversationId }, (part) => {
+        parts[part.index - 1] = `${part.index}. ${part.question}\n${part.answer}`;
+        pending.textContent = parts.filter(Boolean).join("\n\n");
+      });
       if (["upstream_error", "service_unavailable"].includes(result.error_type)) event("error");
       conversationId = result.conversation_id || conversationId;
       try { localStorage.setItem(key, conversationId); } catch (_) { /* 当前会话仍可继续 */ }
       if (result.related_courses?.length) event("recommendation");
-      line(result.answer, "as-agent");
+      pending.textContent = result.answer;
       for (const item of (result.related_courses || []).slice(0, 3)) courseCard(item);
       const matched = result.related_courses?.length;
       const forceHandoff = ["advisor", "commercial", "multi_question"].includes(result.intent);
@@ -154,7 +184,11 @@
       }
       for (const source of result.sources || []) line(`依据：${source.title}${source.snippet ? " · " + source.snippet : ""}`, "as-source");
       for (const source of result.fact_sources || []) line(`资料来源：${source.status === "official" ? "官网实时信息" : "课程文字资料"} · 更新于 ${source.updated_at.slice(0, 10)}`, "as-source");
-    } catch (cause) { error(cause.message); }
+    } catch (cause) {
+      if (!parts.length) pending.remove();
+      error(cause.message);
+      body.append(button("重试本次提问", () => askQuestion(form, question)));
+    }
     inputArea.append(form);
   }
   function showHome() {
