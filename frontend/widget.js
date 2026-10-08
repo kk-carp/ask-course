@@ -10,6 +10,18 @@
   if (!courseId || !/^\d{1,12}$/.test(courseId)) return;
   const base = new URL("./", script.src);
   const api = (path) => new URL(path.replace(/^\//, ""), base).toString();
+  async function loadAnswerFormat() {
+    if (globalThis.AnswerFormat) return;
+    for (const path of ["vendor/answer-libs.js", "answer-format.js"]) {
+      await new Promise((resolve, reject) => {
+        const asset = document.createElement("script");
+        asset.src = api(path);
+        asset.onload = resolve;
+        asset.onerror = () => reject(new Error("回答排版资源加载失败"));
+        document.head.append(asset);
+      });
+    }
+  }
   const key = "arborseek-consultation";
   const DEFAULT_PROMPTS = [
     "推荐一门适合我的课程",
@@ -162,12 +174,12 @@
     line(question, "as-user");
     clear(inputArea);
     event("question");
-    const pending = line("正在理解问题并查询课程资料…", "as-agent");
+    const pending = line("正在理解问题并查询课程资料…", "as-agent answer-markdown");
     const parts = [];
     try {
       const result = await streamAsk({ question, course_id: courseId, channel: "course_page", conversation_id: conversationId }, (part) => {
         parts[part.index - 1] = `${part.index}. ${part.question}\n${part.answer}`;
-        pending.textContent = parts.filter(Boolean).join("\n\n");
+        pending.innerHTML = AnswerFormat.markdown(parts.filter(Boolean).join("\n\n"));
       });
       if (["upstream_error", "service_unavailable"].includes(result.error_type)) {
         event("error");
@@ -176,7 +188,7 @@
       conversationId = result.conversation_id || conversationId;
       try { localStorage.setItem(key, conversationId); } catch (_) { /* 当前会话仍可继续 */ }
       if (result.related_courses?.length) event("recommendation");
-      pending.textContent = result.answer;
+      pending.innerHTML = AnswerFormat.markdown(result.answer);
       for (const item of (result.related_courses || []).slice(0, 3)) courseCard(item);
       const matched = result.related_courses?.length;
       const forceHandoff = ["advisor", "commercial", "multi_question"].includes(result.intent);
@@ -184,7 +196,7 @@
         handoff(result.owner, result.handoff_summary);
       }
       for (const source of result.sources || []) line(`依据：${source.title}${source.snippet ? " · " + source.snippet : ""}`, "as-source");
-      for (const source of result.fact_sources || []) line(`资料来源：${source.status === "official" ? "官网实时信息" : "课程文字资料"} · 更新于 ${source.updated_at.slice(0, 10)}`, "as-source");
+      for (const label of AnswerFormat.factSourceLabels(result.fact_sources)) line(`资料来源：${label}`, "as-source");
     } catch (cause) {
       if (!parts.length) pending.remove();
       error(cause.message);
@@ -237,6 +249,7 @@
       .as-input form { display: grid; gap: 8px; } textarea, select, input { width: 100%; border: 1px solid #bad2bf; border-radius: 9px; background: white; padding: 8px; }
       textarea { min-height: 64px; resize: vertical; }
     `;
+    style.textContent += AnswerFormat.styles;
     const launch = button("课程咨询", () => {
       const opening = !panel.classList.contains("open");
       panel.classList.toggle("open", opening);
@@ -252,9 +265,9 @@
     body = el("div", undefined, "as-body"); inputArea = el("div", undefined, "as-input");
     panel.append(head, body, inputArea); shadow.append(style, launch, panel);
   }
-  json(`widget/config?course_id=${encodeURIComponent(courseId)}`).then((result) => {
+  json(`widget/config?course_id=${encodeURIComponent(courseId)}`).then(async (result) => {
     config = result;
     try { conversationId = localStorage.getItem(key) || undefined; } catch (_) { /* 使用当前会话 */ }
-    if (result.enabled) { mount(); event("widget_impression"); }
+    if (result.enabled) { await loadAnswerFormat(); mount(); event("widget_impression"); }
   }).catch(() => {});
 })();

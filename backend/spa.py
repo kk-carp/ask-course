@@ -29,6 +29,14 @@ def _demo_page() -> FileResponse:
 
 def register_frontend(app: FastAPI) -> None:
     """有 P0 示例页就托管它。只有示例页缺失时才回退到 frontend/dist。"""
+    frontend_dir = DEMO_INDEX.parent
+    if (frontend_dir / "vendor").is_dir():
+        app.mount("/vendor", StaticFiles(directory=frontend_dir / "vendor"), name="frontend-vendor")
+
+    @app.get("/answer-format.js", include_in_schema=False)
+    def answer_format_script() -> FileResponse:
+        return FileResponse(frontend_dir / "answer-format.js", media_type="text/javascript; charset=utf-8")
+
     if WIDGET_SCRIPT.is_file():
         @app.get("/widget.js", include_in_schema=False)
         def widget_script() -> FileResponse:

@@ -361,6 +361,8 @@
     </div>
   </div>
 
+  <script src="./vendor/answer-libs.js"></script>
+  <script src="./answer-format.js"></script>
   <script>
     const COURSES = [
       { id: "", name: "未指定课程", sub: "按官网课程列表自动匹配" },
@@ -472,7 +474,7 @@
       }
       if (payload.llm_called) tags.push('<span class="tag">已调用对话模型</span>');
       meta.innerHTML = tags.join("");
-      let html = `<div>${escapeHtml(answer)}</div>`;
+      let html = `<div class="answer-markdown">${AnswerFormat.markdown(answer)}</div>`;
       if (payload.related_courses && payload.related_courses.length) {
         html += `<div class="related"><b>相关官网课程</b>${payload.related_courses.slice(0, 3).map((item) => {
           const detail = (item.source_url && /^https:\/\/www\.arborseek\.com\/course\/\d+\/?$/.test(item.source_url))
@@ -493,7 +495,8 @@
           `<div class="source"><b>${escapeHtml(src.title || "来源")}</b>${escapeHtml(src.snippet || "")}</div>`
         ).join("")}</div>`;
       }
-      if (payload.fact_sources?.length) html += `<div class="sources">${payload.fact_sources.map(src => `<div class="source">${src.status === "official" ? "官网实时信息" : "课程文字资料"} · 更新于 ${escapeHtml(src.updated_at?.slice(0, 10) || "")}</div>`).join("")}</div>`;
+      const factLabels = AnswerFormat.factSourceLabels(payload.fact_sources);
+      if (factLabels.length) html += `<div class="sources">${factLabels.map(label => `<div class="source">${escapeHtml(label)}</div>`).join("")}</div>`;
       const owner = payload.owner;
       const forceHandoff = ["advisor", "commercial", "multi_question"].includes(payload.intent);
       const matchedCourses = payload.related_courses && payload.related_courses.length;
