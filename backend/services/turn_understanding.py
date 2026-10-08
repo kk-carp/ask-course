@@ -13,13 +13,17 @@ from backend.config import settings
 from backend.infra.generate import complete_chat
 from backend.services.consultation_service import validate_answer
 from backend.services.course_catalog_service import OfficialCourse
-from backend.services.intent_router import classify_intent
 from backend.services.course_facts import fact_topic
+from backend.services.intent_router import classify_intent, recommend_has_direction
 from backend.services.profile_extraction import extract_profile_updates
-from backend.services.question_decomposition import split_questions
 from backend.services.project_guidance import is_project_goal
+from backend.services.question_decomposition import split_questions
 
 _log = logging.getLogger(__name__)
+
+
+def is_simple_opening(question: str) -> bool:
+    return classify_intent(question).value == "recommend" and not recommend_has_direction(question)
 
 
 class ParsedTurn(BaseModel):
@@ -70,7 +74,15 @@ def understand_turn(question: str, *, page_course_id: str | None, profile: dict,
         fallback.course_id = page_course_id
     reference_locked = bool(explicit or ordinal or re.search(
         r"当前页面|这页|页面上|这门课|这个课|该课|^(?:找人工|找课程顾问|找顾问|联系顾问|转人工)$", question))
-    if not settings.chat_api_key:
+    # 明确开场和已确定课程的事实查询无需再等待一次语义模型。
+    # 画像、修正及比较仍交给模型，保留复杂表达的理解能力。
+    explicit_facts = (
+        fallback.intent == "content" and fallback.course_id
+        and not fallback.profile_updates and not fallback.compare_ids
+        and all(fact_topic(part) for part in fallback.questions)
+        and not re.search(r"第|比较|对比|区别|刚才|说错|改成|不是", question)
+    )
+    if not settings.chat_api_key or is_simple_opening(question) or explicit_facts:
         return fallback
     allowed = {item.course_id for item in catalog} | set(candidates)
     if page_course_id:

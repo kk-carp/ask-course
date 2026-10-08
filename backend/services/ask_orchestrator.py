@@ -14,6 +14,9 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from dataclasses import dataclass, replace
 from uuid import UUID
 
@@ -22,6 +25,7 @@ from fastapi import HTTPException
 from backend import db
 from backend.config import settings
 from backend.errors import ServiceUnavailableError, UpstreamServiceError
+from backend.infra.metrics import record_latency
 from backend.models import VisitorConsultation
 from backend.schemas import AskRequest, AskResponse, OwnerInfo, RelatedCourse
 from backend.services.approved_courses import (
@@ -38,8 +42,13 @@ from backend.services.consultation_service import (
     remember_turn,
 )
 from backend.services.conversation_service import ConversationNotFoundError
-from backend.services.course_catalog_service import OfficialCourse, search_related_courses
+from backend.services.course_catalog_service import (
+    OfficialCourse,
+    search_related_courses,
+)
+from backend.services.course_facts import answer_course_fact
 from backend.services.handoff_service import resolve_handoff
+from backend.services.handoff_summary import build_handoff_summary
 from backend.services.intent_router import (
     Intent,
     classify_intent,
@@ -47,17 +56,22 @@ from backend.services.intent_router import (
     recommend_has_direction,
     should_enter_guest_consultation,
 )
-from backend.services.profile_extraction import extract_profile_updates, looks_like_profile
+from backend.services.profile_extraction import (
+    extract_profile_updates,
+    looks_like_profile,
+)
 from backend.services.public_course_info import (
     ANSWER_PUBLIC_INSUFFICIENT,
     answer_public_question,
     public_fact_topic,
 )
 from backend.services.qa_service import AskResult, answer_question
-from backend.services.course_facts import answer_course_fact
-from backend.services.turn_understanding import Understanding, understand_turn
-from backend.services.handoff_summary import build_handoff_summary
 from backend.services.topic_owner_service import is_usable_contact
+from backend.services.turn_understanding import (
+    Understanding,
+    is_simple_opening,
+    understand_turn,
+)
 
 _log = logging.getLogger("backend.ask_orchestrator")
 
@@ -394,6 +408,17 @@ def run_ask_turn(payload: AskRequest, identity: AskIdentity) -> AskResponse:
 
 
 def iter_ask_turn(payload: AskRequest, identity: AskIdentity):
+    started = time.perf_counter()
+    try:
+        yield from _iter_ask_turn(payload, identity)
+    finally:
+        elapsed = (time.perf_counter() - started) * 1000
+        record_latency("ask_turn", elapsed)
+        if not payload.conversation_id:
+            record_latency("ask_first_turn", elapsed)
+
+
+def _iter_ask_turn(payload: AskRequest, identity: AskIdentity):
     """每轮只解析一次，统一保存历史、候选顺序和本次理解的模型用量。"""
     profile, history = {}, []
     if identity.visitor_id and payload.conversation_id:
@@ -405,8 +430,13 @@ def iter_ask_turn(payload: AskRequest, identity: AskIdentity):
             profile, history = json.loads(row.profile_json), dialogue_history(row)
             if not profile.get("_pending_field") and history and history[-1][0] == "assistant":
                 profile["_pending_field"] = next((field for field, question in QUESTIONS.items() if history[-1][1].endswith(question)), None)
+    t0 = time.perf_counter()
+    catalog = () if is_simple_opening(payload.question) else load_recommendable_courses()
+    record_latency("ask_catalog", (time.perf_counter() - t0) * 1000)
+    t0 = time.perf_counter()
     understanding = understand_turn(payload.question, page_course_id=payload.course_id,
-                                    profile=profile, history=history, catalog=load_recommendable_courses())
+                                    profile=profile, history=history, catalog=catalog)
+    record_latency("ask_understanding", (time.perf_counter() - t0) * 1000)
     if len(understanding.compare_ids) >= 2:
         dialogue_id = None
         if identity.visitor_id:
@@ -462,6 +492,14 @@ def iter_ask_turn(payload: AskRequest, identity: AskIdentity):
 
 
 def _run_questions(payload: AskRequest, identity: AskIdentity, understanding: Understanding):
+    started = time.perf_counter()
+    try:
+        yield from _iter_questions(payload, identity, understanding)
+    finally:
+        record_latency("ask_questions", (time.perf_counter() - started) * 1000)
+
+
+def _iter_questions(payload: AskRequest, identity: AskIdentity, understanding: Understanding):
     questions = understanding.questions
     if len(questions) == 1:
         yield "final", _run_single_question(payload.model_copy(update={"question": questions[0]}), identity, record_history=False, understanding=understanding)
@@ -470,27 +508,52 @@ def _run_questions(payload: AskRequest, identity: AskIdentity, understanding: Un
     responses: list[AskResponse] = []
     failures: list[HTTPException] = []
     conversation_id = payload.conversation_id
-    for question in questions:
+    # 仅同一已确定课程的独立游客内容查询并行；推荐、付款与登录
+    # 会话保持串行，避免课程绑定和历史写入相互覆盖。
+    parallel = (
+        identity.user_id is None and bool(understanding.course_id)
+        and understanding.intent == "content" and not understanding.profile_updates
+        and all(
+            classify_intent(q) is Intent.content and not looks_like_profile(q, None)
+            and not re.search(r"第[一二三123]|当前页面|这页|页面上|课程\s*(?:ID\s*)?\d", q, re.IGNORECASE)
+            for q in questions
+        )
+    )
+    guest_context = None
+    if parallel and identity.visitor_id:
+        try:
+            guest_context = _prepare_guest_dialogue(
+                identity.visitor_id, payload, intent=Intent.content, understanding=understanding,
+            )
+        except ServiceUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        conversation_id = UUID(guest_context[0])
+        # 问诊预览需要状态推进，不能作为独立查询处理。
+        parallel = guest_context[2] is None
+
+    def execute(question):
+        nonlocal conversation_id
         part = payload.model_copy(update={
             "question": question, "conversation_id": conversation_id,
+            "course_id": understanding.course_id if parallel else payload.course_id,
         })
-        try:
-            result = _run_single_question(
-                part, identity, record_history=False, context_question=payload.question,
-                understanding=understanding,
-            )
-        except HTTPException as exc:
-            if exc.status_code not in {502, 503}:
-                raise
-            failures.append(exc)
-            result = AskResponse(
-                answer="这项查询暂时不可用，请稍后重试。",
-                hit=False,
-                error_type="upstream_error" if exc.status_code == 502 else "service_unavailable",
-            )
-        conversation_id = result.conversation_id or conversation_id
-        responses.append(result)
-        yield "part", {"index": len(responses), "question": question, **result.model_dump(mode="json")}
+        result = _run_single_question(
+            part, identity, record_history=False, context_question=payload.question,
+            understanding=understanding, guest_context=guest_context if parallel else None,
+        )
+        if not parallel:
+            conversation_id = result.conversation_id or conversation_id
+        return result
+
+    pool = ThreadPoolExecutor(max_workers=min(3, len(questions))) if parallel else None
+    futures = [pool.submit(copy_context().run, execute, question) for question in questions] if pool else []
+    try:
+        yield from _collect_question_results(questions, execute, futures, responses, failures)
+    finally:
+        if pool:
+            pool.shutdown(wait=True, cancel_futures=True)
+
+    conversation_id = next((r.conversation_id for r in reversed(responses) if r.conversation_id), conversation_id)
 
     if len(failures) == len(questions):
         raise failures[0]
@@ -522,10 +585,28 @@ def _run_questions(payload: AskRequest, identity: AskIdentity, understanding: Un
     yield "final", response
 
 
+def _collect_question_results(questions, execute, futures, responses, failures):
+    for question in questions:
+        try:
+            result = futures[len(responses)].result() if futures else execute(question)
+        except HTTPException as exc:
+            if exc.status_code not in {502, 503}:
+                raise
+            failures.append(exc)
+            result = AskResponse(
+                answer="这项查询暂时不可用，请稍后重试。",
+                hit=False,
+                error_type="upstream_error" if exc.status_code == 502 else "service_unavailable",
+            )
+        responses.append(result)
+        yield "part", {"index": len(responses), "question": question, **result.model_dump(mode="json")}
+
+
 def _run_single_question(
     payload: AskRequest, identity: AskIdentity, *, record_history: bool = True,
     context_question: str | None = None,
     understanding: Understanding | None = None,
+    guest_context: tuple | None = None,
 ) -> AskResponse:
     """执行一个问题；拆分出的问答由调用方合并后保存访客历史。"""
     allowed_spaces = identity.allowed_spaces
@@ -543,6 +624,7 @@ def _run_single_question(
     if user_id is None and visitor_id:
         try:
             dialogue_id, visitor_history, preview, dialogue_course_id = (
+                guest_context if guest_context is not None else
                 _prepare_guest_dialogue(visitor_id, payload, intent=intent, understanding=understanding)
             )
         except ServiceUnavailableError as exc:
@@ -648,7 +730,8 @@ def _run_single_question(
                 _remember_guest_dialogue(
                     visitor_id, dialogue_id, payload.question, result.answer
                 )
-            _bind_selected_course(visitor_id, dialogue_id, official.course_id)
+            if guest_context is None:
+                _bind_selected_course(visitor_id, dialogue_id, official.course_id)
             result = replace(result, conversation_id=UUID(dialogue_id))
         return to_response(result, _enrich_related(card), intent="course_info")
 
@@ -686,7 +769,7 @@ def _run_single_question(
             _remember_guest_dialogue(
                 visitor_id, dialogue_id, payload.question, result.answer
             )
-        if course_id and len(related) <= 1:
+        if guest_context is None and course_id and len(related) <= 1:
             _bind_selected_course(visitor_id, dialogue_id, course_id)
         result = replace(result, conversation_id=UUID(dialogue_id))
     return to_response(

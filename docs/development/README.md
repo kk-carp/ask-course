@@ -23,6 +23,9 @@ python scripts/smoke_kernel.py
 python -m pytest tests
 ```
 
+首次咨询和多问题性能回归：`python -m pytest tests/test_response_latency.py`。
+用 `python scripts/benchmark_response_latency.py` 对比串行参考路径与最多三项并行的调度耗时；基准模拟每项 120 ms 上游等待，不连接数据库、官网或模型，不代表线上绝对耗时。真实请求按管理员 `/metrics` 的 `latency_ms` 和访问日志的 `duration_ms` 核验。
+
 内核自检不需要数据库、模型或 API Key。资料门禁与联网金标评测见 [L0 手册](../operations/L0_OPERATIONS.md)，单元测试通过不能代替业务验收。
 
 ## 同步维护
