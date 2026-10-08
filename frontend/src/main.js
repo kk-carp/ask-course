@@ -1,4 +1,4 @@
-import { createApp } from 'vue';
+import { createApp, reactive } from 'vue';
 import Widget from './Widget.vue';
 import styles from './widget.css?inline';
 
@@ -7,10 +7,11 @@ async function bootstrap() {
   if (!script || document.querySelector('#arborseek-presales-agent')) return;
   const preview = script.dataset.preview === 'true' && ['/', '/qa', '/login'].includes(location.pathname);
   const pageCourse = location.pathname.match(/^\/course\/(\d+)\/?$/)?.[1];
-  if (!preview && (!pageCourse || pageCourse !== script.dataset.courseId || !/^\d{1,12}$/.test(pageCourse))) return;
+  const siteMode = script.dataset.mode === 'site';
+  if (!preview && !siteMode && (!pageCourse || pageCourse !== script.dataset.courseId || !/^\d{1,12}$/.test(pageCourse))) return;
   const base = new URL(preview && script.type === 'module' ? '/' : './', script.src);
   const api = path => new URL(path, base).toString();
-  const config = preview ? {enabled: true} : await request(api('widget/config?course_id=' + encodeURIComponent(pageCourse)));
+  const config = preview ? {enabled: true} : await request(api(`widget/config?${siteMode ? 'mode=site&' : ''}course_id=${encodeURIComponent(pageCourse || '')}`));
   if (!config.enabled) return;
   if (!globalThis.AnswerFormat) {
     for (const path of ['vendor/answer-libs.js', 'answer-format.js']) {
@@ -28,7 +29,13 @@ async function bootstrap() {
   const root = document.createElement('div');
   const popupContainer = document.createElement('div'); popupContainer.className = 'as-popup-root';
   shadow.append(style, root, popupContainer); document.body.append(host);
-  createApp(Widget, {api, config, preview, courseId: pageCourse || null, format: AnswerFormat, styleContainer: shadow, popupContainer}).mount(root);
+  const pageContext = reactive({courseId: pageCourse || null});
+  createApp(Widget, {api, config, preview, pageContext, siteMode, courseId: pageCourse || null, format: AnswerFormat, styleContainer: shadow, popupContainer}).mount(root);
+  const setPageContext = ({courseId} = {}) => {
+    pageContext.courseId = /^\d{1,12}$/.test(String(courseId || '')) ? String(courseId) : null;
+  };
+  globalThis.ArborseekAgent = Object.freeze({setPageContext});
+  window.addEventListener('popstate', () => setPageContext({courseId: location.pathname.match(/^\/course\/(\d+)\/?$/)?.[1]}));
 }
 async function request(url) {
   const response = await fetch(url, {credentials: 'include'});

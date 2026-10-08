@@ -8,6 +8,8 @@ from uuid import uuid4
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from backend.infra.metrics import record_latency
+
 _REQUEST_ID_HEADER = b"x-request-id"
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 _request_id: ContextVar[str] = ContextVar("request_id", default="")
@@ -60,6 +62,9 @@ class RequestIdMiddleware:
                 status_code = int(message.get("status") or 500)
                 headers = list(message.get("headers") or [])
                 headers.append((_REQUEST_ID_HEADER, request_id.encode("ascii")))
+                if str(scope.get('path', '')).startswith(('/widget/', '/ask', '/consultations', '/purchase/')):
+                    headers = [(name, value) for name, value in headers if name.lower() != b'cache-control']
+                    headers.append((b'cache-control', b'no-store'))
                 message = {**message, "headers": headers}
             await send(message)
 
@@ -68,6 +73,9 @@ class RequestIdMiddleware:
         finally:
             method = scope.get("method", "")
             path = scope.get("path", "")
+            if str(path).startswith('/widget/conversations'):
+                record_latency('widget_history_read' if method == 'GET' else 'widget_history_write',
+                               (time.perf_counter() - started) * 1000)
             _access_log.info(
                 "request_id=%s method=%s path=%s status=%s duration_ms=%.1f",
                 request_id,

@@ -5,16 +5,7 @@ from enum import Enum
 from uuid import uuid4
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import (
-    Boolean,
-    DateTime,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
-    UniqueConstraint,
-    func,
-)
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -190,44 +181,37 @@ class VisitorConsultation(Base):
     """匿名访客的问诊画像与最近对话；不进入知识库。"""
 
     __tablename__ = "visitor_consultations"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid4())
+    )
     visitor_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     course_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     profile_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     history_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="collecting")
-    title: Mapped[str] = mapped_column(String(40), nullable=False, default="新咨询", server_default="新咨询")
-    custom_title: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
-    widget_session: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
-    last_activity_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    creation_key: Mapped[str | None] = mapped_column(String(36), nullable=True, unique=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-
-
-class VisitorTurn(Base):
-    """One user question and its complete answer snapshot; recent context stays separate."""
-
-    __tablename__ = "visitor_turns"
-    __table_args__ = (UniqueConstraint("conversation_id", "request_id", name="uq_visitor_turn_request"),)
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    conversation_id: Mapped[str] = mapped_column(ForeignKey("visitor_consultations.id", ondelete="CASCADE"), nullable=False, index=True)
-    request_id: Mapped[str] = mapped_column(String(36), nullable=False)
-    question: Mapped[str] = mapped_column(Text, nullable=False)
-    response_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="collecting"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class FunnelEvent(Base):
     """只记录枚举事件、课程和时间；不存问题正文或个人资料。"""
 
     __tablename__ = "funnel_events"
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid4())
+    )
     visitor_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     course_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     event_name: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class PilotControl(Base):
@@ -236,4 +220,6 @@ class PilotControl(Base):
     __tablename__ = "pilot_control"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     percent: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

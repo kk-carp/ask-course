@@ -128,6 +128,9 @@ def clear_course_list_cache() -> None:
 
 
 def get_course_by_id(course_id: str) -> OfficialCourse | None:
+    from backend.services.course_scope import permits
+    if not permits(course_id):
+        return None
     key = (course_id or "").strip()
     if not key:
         return None

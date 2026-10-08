@@ -3,11 +3,11 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
-from backend.models import Conversation, FunnelEvent, VisitorConsultation
 from backend.config import settings
+from backend.models import Conversation, FunnelEvent, VisitorConsultation, VisitorTurn
 
 
 @dataclass(frozen=True)
@@ -34,7 +34,11 @@ def purge_expired(
         session.delete(conversation)
 
     consultation_cutoff = moment - timedelta(hours=settings.visitor_consultation_hours)
-    consultations = session.execute(delete(VisitorConsultation).where(VisitorConsultation.updated_at < consultation_cutoff)).rowcount or 0
+    expired = or_(VisitorConsultation.deleted_at.is_not(None),
+                  func.coalesce(VisitorConsultation.last_activity_at, VisitorConsultation.updated_at) < consultation_cutoff)
+    ids = select(VisitorConsultation.id).where(expired)
+    session.execute(delete(VisitorTurn).where(VisitorTurn.conversation_id.in_(ids)))
+    consultations = session.execute(delete(VisitorConsultation).where(expired)).rowcount or 0
     event_cutoff = moment - timedelta(days=30)
     funnel_events = session.execute(delete(FunnelEvent).where(FunnelEvent.created_at < event_cutoff)).rowcount or 0
     return PurgeResult(conversations=len(conversations), consultations=consultations, funnel_events=funnel_events)

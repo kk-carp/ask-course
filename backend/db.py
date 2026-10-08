@@ -5,8 +5,8 @@ P0 改动（相对 FDE 源）：
 2. 不再写入 FDE 的 student/employee/teaching 演示账号，改由 `seed_course_owners` 建立内部账号；
 """
 
-from collections.abc import Generator
 import logging
+from collections.abc import Generator
 
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
@@ -142,6 +142,17 @@ def _ensure_visitor_history_column(current_engine: Engine) -> None:
 def init_db() -> None:
     """启用 pgvector、创建表结构，并初始化课程知识空间与课程—售前映射。"""
     current_engine = init_engine()
+    from pathlib import Path
+
+    from alembic.config import Config
+    from alembic.runtime.migration import MigrationContext
+    from alembic.script import ScriptDirectory
+
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    with current_engine.connect() as connection:
+        current = MigrationContext.configure(connection).get_current_revision()
+    if current != ScriptDirectory.from_config(config).get_current_head():
+        raise RuntimeError("数据库迁移未完成：请先备份，再运行 python -m alembic upgrade head")
 
     # 仅在 PostgreSQL 下启用 pgvector 扩展。
     if current_engine.dialect.name == "postgresql":

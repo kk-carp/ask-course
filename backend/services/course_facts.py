@@ -66,6 +66,9 @@ def _money(value: object) -> str | None:
 
 def answer_course_fact(question: str, course_id: str) -> tuple[str, list[dict]] | None:
     """返回答案及可追溯来源。None 表示此问题应继续走正文检索。"""
+    from backend.services.course_scope import permits
+    if not permits(course_id):
+        return None
     topic = fact_topic(question)
     if not topic:
         return None

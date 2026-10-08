@@ -8,7 +8,11 @@ import { StyleProvider } from 'ant-design-vue/es/_util/cssinjs';
 const ATextarea = AInput.TextArea;
 const menuItems = [{key: 'rename', label: '重命名', icon: () => h(UiIcon, {name: 'edit'})}, {key: 'delete', label: '删除', danger: true, icon: () => h(UiIcon, {name: 'delete'})}];
 
-const props = defineProps(['api', 'config', 'preview', 'courseId', 'format', 'styleContainer', 'popupContainer']);
+const props = defineProps(['api', 'config', 'preview', 'courseId', 'pageContext', 'siteMode', 'format', 'styleContainer', 'popupContainer']);
+const durable = !!props.config.history_enabled;
+const pageCourse = computed(() => props.pageContext ? props.pageContext.courseId : props.courseId);
+const pageTitle = computed(() => pageCourse.value === props.config.course_id ? props.config.course_title : null);
+const historyError = ref(''), historyLoading = ref(false), nextHistoryOffset = ref(null);
 const getPopupContainer = () => props.popupContainer;
 const open = ref(false), draft = ref(''), busy = ref(false), turns = ref([]);
 const input = ref(), log = ref(), launcher = ref();
@@ -18,10 +22,23 @@ const filteredSessions = computed(() => sessions.value.filter(session => session
 const renameValid = computed(() => !!nameDraft.value.trim() && [...nameDraft.value.trim()].length <= 40);
 let sessionSequence = 1, activeSession = 1;
 const key = props.preview ? 'arborseek-preview-consultation' : 'arborseek-consultation';
-let conversationId;
+let conversationId, creationRequestId;
 try { conversationId = localStorage.getItem(key) || undefined; } catch { /* 无持久存储仍可咨询 */ }
 const prompts = props.config.default_prompts?.length ? props.config.default_prompts : ['推荐一门适合我的课程', '按我的基础帮我选课', '我想找课程顾问'];
-const event = name => props.preview ? Promise.resolve() : json(props.api, 'widget/events', 'POST', {course_id: props.courseId, event_name: name}).catch(() => {});
+const event = name => props.preview ? Promise.resolve() : json(props.api, 'widget/events', 'POST', {course_id: pageCourse.value, mode: props.siteMode ? 'site' : 'course', event_name: name}).catch(() => {});
+const newId = () => crypto.randomUUID();
+function rememberId() {
+  try { if (conversationId) localStorage.setItem(key, conversationId); else localStorage.removeItem(key); } catch { /* ignore */ }
+}
+async function refreshHistory(offset = 0) {
+  historyLoading.value = true; historyError.value = '';
+  try {
+    const data = await json(props.api, `widget/conversations?offset=${offset}`);
+    sessions.value = offset ? [...sessions.value, ...data.items] : data.items;
+    nextHistoryOffset.value = data.next_offset;
+  } catch (cause) { historyError.value = cause.message; }
+  finally { historyLoading.value = false; }
+}
 let previousOverflow = null;
 function syncScroll() {
   const lock = open.value && matchMedia('(max-width: 600px)').matches;
@@ -33,7 +50,10 @@ watch(open, async value => {
   if (value) { event('widget_open'); input.value?.focus({preventScroll: true}); }
   else launcher.value?.focus({preventScroll: true});
 });
-onMounted(() => { window.addEventListener('resize', syncScroll); event('widget_impression'); });
+onMounted(async () => {
+  window.addEventListener('resize', syncScroll); event('widget_impression');
+  if (durable && conversationId) await restoreSession({id: conversationId});
+});
 onBeforeUnmount(() => { window.removeEventListener('resize', syncScroll); if (previousOverflow !== null) document.body.style.overflow = previousOverflow; });
 async function scrollAnswer() { await nextTick(); if (log.value) log.value.scrollTop = log.value.scrollHeight; }
 function resizeInput() { /* Ant Design Vue 的 autoSize 负责输入框高度。 */ }
@@ -41,6 +61,7 @@ function keydown(e) {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !matchMedia('(pointer: coarse)').matches) { e.preventDefault(); ask(); }
 }
 function saveCurrent() {
+  if (durable) return;
   if (!turns.value.length) return;
   const index = sessions.value.findIndex(item => item.id === activeSession);
   const customTitle = index >= 0 ? sessions.value[index].customTitle : '';
@@ -50,24 +71,49 @@ function saveCurrent() {
 }
 function onHistoryOpen(value) {
   if (busy.value) return;
-  if (value) saveCurrent();
+  if (value) { if (durable) refreshHistory(); else saveCurrent(); }
   historyOpen.value = value;
 }
-function sessionAction(key, session) {
-  if (key === 'rename') { editingSession.value = session.id; nameDraft.value = session.title; }
+async function sessionAction(key, session) {
+  if (key === 'rename') { historyError.value = ''; editingSession.value = session.id; nameDraft.value = session.title; }
   if (key === 'delete') {
+    if (durable) {
+      try { await json(props.api, `widget/conversations/${session.id}`, 'DELETE'); }
+      catch (cause) { historyError.value = cause.message; return; }
+    }
     sessions.value = sessions.value.filter(item => item.id !== session.id);
     if (session.id === activeSession) reset(false);
   }
 }
-function renameSession() {
+async function renameSession() {
   if (!renameValid.value) return;
   const session = sessions.value.find(item => item.id === editingSession.value);
+  if (durable && session) {
+    try { await json(props.api, `widget/conversations/${session.id}`, 'PATCH', {title: nameDraft.value.trim()}); }
+    catch (cause) { historyError.value = cause.message; return; }
+  }
   if (session) { session.customTitle = nameDraft.value.trim(); session.title = session.customTitle; }
   editingSession.value = null; historyOpen.value = true;
 }
-function restoreSession(session) {
+async function restoreSession(session) {
   if (busy.value) return;
+  if (durable) {
+    busy.value = true; historyError.value = '';
+    try {
+      let offset = 0, records = [];
+      do {
+        const data = await json(props.api, `widget/conversations/${session.id}/messages?offset=${offset}`);
+        records.push(...data.items); offset = data.next_offset;
+      } while (offset !== null && offset !== undefined);
+      turns.value = records.map(item => ({question: item.question, result: item.result, answer: item.result.answer, requestId: item.request_id, parts: [], thinking: false}));
+      activeSession = session.id; conversationId = session.id; draft.value = ''; historyOpen.value = false; rememberId();
+      await scrollAnswer();
+    } catch (cause) {
+      historyError.value = cause.message;
+      if (cause.status === 404) { conversationId = undefined; rememberId(); }
+    } finally { busy.value = false; }
+    return;
+  }
   saveCurrent();
   activeSession = session.id; turns.value = session.turns; draft.value = session.draft;
   conversationId = session.conversationId; historyOpen.value = false;
@@ -78,6 +124,7 @@ function reset(archive = true) {
   if (busy.value) return;
   if (archive) saveCurrent(); activeSession = ++sessionSequence; historyOpen.value = false;
   turns.value = []; draft.value = ''; conversationId = undefined;
+  creationRequestId = undefined;
   try { localStorage.removeItem(key); } catch { /* ignore */ }
   nextTick(() => { resizeInput(); input.value?.focus(); });
 }
@@ -95,7 +142,13 @@ async function ask(preset, retryTurn) {
   }
   event('question'); scrollAnswer();
   try {
-    const result = await streamAsk(props.api, {question, course_id: props.courseId, channel: props.preview ? 'internal_tool' : 'course_page', conversation_id: conversationId}, part => {
+    if (durable && !conversationId) {
+      creationRequestId ||= newId();
+      const session = await json(props.api, 'widget/conversations', 'POST', {request_id: creationRequestId});
+      conversationId = session.id; activeSession = session.id; rememberId();
+    }
+    if (durable && !turn.requestId) turn.requestId = newId();
+    const result = await streamAsk(props.api, {question, course_id: pageCourse.value, channel: props.preview ? 'internal_tool' : props.siteMode ? 'site_widget' : 'course_page', conversation_id: conversationId, request_id: turn.requestId}, part => {
       turn.parts[part.index - 1] = `${part.index}. ${part.question}\n${part.answer}`;
       turn.answer = turn.parts.filter(Boolean).join('\n\n'); turn.thinking = false; scrollAnswer();
     });
@@ -151,7 +204,10 @@ async function copySummary(turn) {
                 <template #overlay><AMenu @click="({key}) => sessionAction(key, session)" :items="menuItems" /></template>
               </ADropdown>
             </div>
-            <p class="as-history-note">仅保留本次页面访问的对话，刷新后清空。</p>
+            <p v-if="historyLoading" class="as-history-note">正在加载…</p>
+            <p v-if="historyError" class="as-error" role="alert">{{ historyError }}</p>
+            <AButton v-if="durable && nextHistoryOffset !== null" :disabled="historyLoading" @click="refreshHistory(nextHistoryOffset)">加载更多</AButton>
+            <p class="as-history-note">{{ durable ? `本浏览器游客对话保留 ${config.history_hours || 24} 小时，按消息活动时间计算。` : '仅保留本次页面访问的对话，刷新后清空。' }}</p>
           </div>
         </template>
       </APopover>
@@ -165,7 +221,7 @@ async function copySummary(turn) {
       <div v-if="!turns.length" class="as-welcome">
         <div class="as-emblem" aria-hidden="true">探</div>
         <h2>你好，想从哪里开始？</h2><p>聊聊你的学习目标，一起找到合适的课程。</p>
-        <div v-if="config.course_title" class="as-context">正在了解：{{ config.course_title }}</div>
+        <div v-if="pageTitle" class="as-context">正在了解：{{ pageTitle }}</div>
         <div class="as-prompts">
           <AButton type="text" v-for="(prompt, index) in prompts" :key="prompt" @click="ask(prompt)">
             <span class="as-prompt-icon" aria-hidden="true">{{ ['✧', '⌘', '☏'][index % 3] }}</span><span>{{ prompt }}</span><span class="as-prompt-arrow" aria-hidden="true">↗</span>
@@ -205,6 +261,7 @@ async function copySummary(turn) {
       </template>
     </div>
     <div class="as-input">
+      <p v-if="historyError && !historyOpen && editingSession === null" class="as-error" role="alert">{{ historyError }}</p>
       <form class="as-composer" @submit.prevent="ask()">
         <ATextarea ref="input" v-model:value="draft" :disabled="busy" :auto-size="{minRows:2,maxRows:5}" :maxlength="2000" :bordered="false" aria-label="咨询内容" placeholder="问问课程，或说说你想学什么…" @keydown="keydown" />
         <div class="as-composer-footer"><span class="as-key-hint">Enter 发送 · Shift + Enter 换行</span><AButton class="as-send" type="primary" html-type="submit" aria-label="发送消息" title="发送消息" :disabled="busy || !draft.trim()"><UiIcon name="send" /></AButton></div>
@@ -213,6 +270,7 @@ async function copySummary(turn) {
     </div>
   </section>
   <AModal :open="editingSession !== null" title="重命名对话" :get-container="getPopupContainer" :z-index="2147483020" :width="340" :ok-button-props="{disabled:!renameValid}" ok-text="保存" cancel-text="取消" @ok="renameSession" @cancel="editingSession = null" destroy-on-close>
+    <p v-if="historyError" class="as-error" role="alert">{{ historyError }}</p>
     <AInput v-model:value="nameDraft" aria-label="对话名称" placeholder="请输入对话名称" :maxlength="40" @press-enter="renameSession" />
   </AModal>
  </AConfigProvider>

@@ -82,6 +82,8 @@ class AskIdentity:
     user_id: str | None
     user_role: str | None
     visitor_id: str | None
+    course_ids: frozenset[str] | None = None
+    first_turn: bool | None = None
 
 
 def related_course_card(
@@ -166,7 +168,7 @@ def _prepare_guest_dialogue(
         # 无方向开场（默认问题）一律新开问诊：访客 cookie 跨重启仍在，
         # 若复用旧 VisitorConsultation 会带着旧 goal 直接荐课。
         fresh_undirected = (
-            intent is Intent.recommend and not recommend_has_direction(payload.question)
+            not payload.conversation_id and intent is Intent.recommend and not recommend_has_direction(payload.question)
         )
         if fresh_undirected:
             row = VisitorConsultation(
@@ -189,6 +191,10 @@ def _prepare_guest_dialogue(
                 raise HTTPException(status_code=404, detail=str(exc)) from exc
         history = dialogue_history(row)
         profile = json.loads(row.profile_json)
+        from backend.services.course_scope import permits
+        if profile.get('_selected_course_id') and not permits(profile['_selected_course_id']):
+            profile.pop('_selected_course_id', None)
+        profile['_candidate_course_ids'] = [key for key in profile.get('_candidate_course_ids', []) if permits(key)]
         pending = profile.get("_pending_field")
         if not pending and history and history[-1][0] == "assistant":
             pending = next(
@@ -247,7 +253,7 @@ def _remember_guest_dialogue(
         return
     with db.SessionLocal() as session:
         row = load_owned(session, dialogue_id, visitor_id)
-        if row is not None:
+        if row is not None and not row.widget_session:
             remember_turn(session, row, question, answer)
 
 
@@ -408,13 +414,25 @@ def run_ask_turn(payload: AskRequest, identity: AskIdentity) -> AskResponse:
 
 
 def iter_ask_turn(payload: AskRequest, identity: AskIdentity):
+    from backend.services.course_scope import course_scope
     started = time.perf_counter()
+    inner = _iter_ask_turn(payload, identity)
     try:
-        yield from _iter_ask_turn(payload, identity)
+        while True:
+            # SSE resumes the generator in independently copied thread contexts.
+            token = course_scope.set(identity.course_ids)
+            try:
+                item = next(inner)
+            except StopIteration:
+                break
+            finally:
+                course_scope.reset(token)
+            yield item
     finally:
+        inner.close()
         elapsed = (time.perf_counter() - started) * 1000
         record_latency("ask_turn", elapsed)
-        if not payload.conversation_id:
+        if identity.first_turn is True or (identity.first_turn is None and not payload.conversation_id):
             record_latency("ask_first_turn", elapsed)
 
 
@@ -428,6 +446,10 @@ def _iter_ask_turn(payload: AskRequest, identity: AskIdentity):
             if row is None:
                 raise HTTPException(status_code=404, detail="会话不存在或已过期")
             profile, history = json.loads(row.profile_json), dialogue_history(row)
+            if identity.course_ids is not None:
+                if profile.get('_selected_course_id') not in identity.course_ids:
+                    profile.pop('_selected_course_id', None)
+                profile['_candidate_course_ids'] = [key for key in profile.get('_candidate_course_ids', []) if key in identity.course_ids]
             if not profile.get("_pending_field") and history and history[-1][0] == "assistant":
                 profile["_pending_field"] = next((field for field, question in QUESTIONS.items() if history[-1][1].endswith(question)), None)
     t0 = time.perf_counter()

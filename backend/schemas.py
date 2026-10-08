@@ -11,6 +11,7 @@ class AskRequest(BaseModel):
 
     question: str = Field(min_length=1)
     conversation_id: UUID | None = None
+    request_id: UUID | None = None
     # --- P0 新增：转人工路由与归因所需的最小上下文 ---
     # 当前所在课程（前端从 /course/:courseId 解析得到）；用于一级路由精确匹配售前
     course_id: str | None = None

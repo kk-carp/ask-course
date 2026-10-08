@@ -16,7 +16,11 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from backend.config import settings
-from backend.services.course_catalog_service import OfficialCourse, load_official_courses
+from backend.services.course_catalog_service import (
+    OfficialCourse,
+    load_official_courses,
+)
+from backend.services.course_scope import permits
 
 _log = logging.getLogger("backend.approved_courses")
 _ROOT = Path(__file__).resolve().parents[2]
@@ -150,7 +154,7 @@ def load_approved_courses(*, verify_live: bool = False) -> tuple[ApprovedCourse,
     official = {
         item.course_id for item in load_official_courses(force_refresh=verify_live)
     }
-    return tuple(item for item in parsed if item.id in official)
+    return tuple(item for item in parsed if item.id in official and permits(item.id))
 
 
 def load_recommendable_courses() -> tuple[OfficialCourse, ...]:
@@ -169,7 +173,7 @@ def load_recommendable_courses() -> tuple[OfficialCourse, ...]:
     except (OSError, ValueError, KeyError, TypeError):
         return ()
     return tuple(
-        item for item in load_official_courses() if item.course_id in allowed
+        item for item in load_official_courses() if item.course_id in allowed and permits(item.course_id)
     )
 
 

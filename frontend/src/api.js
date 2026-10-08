@@ -6,7 +6,7 @@ export async function json(api, path, method = 'GET', payload) {
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(typeof data.detail === 'string' ? data.detail : `请求失败（${response.status}）`);
+    throw Object.assign(new Error(typeof data.detail === 'string' ? data.detail : `请求失败（${response.status}）`), {status: response.status});
   }
   return response.status === 204 ? null : response.json();
 }

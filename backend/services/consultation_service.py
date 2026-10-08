@@ -15,9 +15,16 @@ from backend.services.approved_courses import (
     load_approved_courses,
     load_recommendable_courses,
 )
-from backend.services.course_catalog_service import expand_course_query, search_related_courses
+from backend.services.course_catalog_service import (
+    expand_course_query,
+    search_related_courses,
+)
 from backend.services.handoff_service import resolve_handoff
-from backend.services.project_guidance import is_project_goal, project_guidance, project_idea
+from backend.services.project_guidance import (
+    is_project_goal,
+    project_guidance,
+    project_idea,
+)
 
 FIELDS = ("goal", "basis", "hardware", "weekly_hours", "deadline")
 QUESTIONS = {
@@ -34,7 +41,7 @@ def _now() -> datetime:
 
 
 def _expired(row: VisitorConsultation) -> bool:
-    updated = row.updated_at or row.created_at or _now()
+    updated = row.last_activity_at or row.updated_at or row.created_at or _now()
     if updated.tzinfo is None:
         updated = updated.replace(tzinfo=timezone.utc)
     return updated < _now() - timedelta(hours=settings.visitor_consultation_hours)
@@ -49,7 +56,7 @@ def load_owned(
             VisitorConsultation.visitor_id == visitor_id,
         )
     )
-    return row if row is not None and not _expired(row) else None
+    return row if row is not None and row.deleted_at is None and not _expired(row) else None
 
 
 def get_or_create_dialogue(
@@ -67,6 +74,8 @@ def get_or_create_dialogue(
         .where(
             VisitorConsultation.visitor_id == visitor_id,
             VisitorConsultation.course_id == course_id,
+            VisitorConsultation.deleted_at.is_(None),
+            VisitorConsultation.widget_session.is_(False),
         )
         .order_by(VisitorConsultation.updated_at.desc(), VisitorConsultation.created_at.desc())
         .limit(1)
@@ -91,6 +100,7 @@ def remember_turn(session: Session, row: VisitorConsultation, question: str, ans
     ))
     row.history_json = json.dumps(history[-6:], ensure_ascii=False)
     row.updated_at = _now()
+    row.last_activity_at = _now()
     session.commit()
 
 

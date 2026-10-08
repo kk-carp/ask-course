@@ -12,6 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend backend
+COPY migrations migrations
+COPY alembic.ini .
 COPY frontend frontend
 COPY --from=frontend-build /frontend/dist frontend/dist
 COPY scripts scripts

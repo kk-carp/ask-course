@@ -11,15 +11,20 @@ from sqlalchemy.orm import Session
 from backend.config import settings
 from backend.db import get_session
 from backend.domain.guest import issue_visitor_id, read_visitor_id
+from backend.errors import ServiceUnavailableError
 from backend.infra.rate_limit import allow
 from backend.models import FunnelEvent, PilotControl
 from backend.services.approved_courses import get_approved_course
-from backend.services.consultation_service import answer, load_owned, present, start
-from backend.services.topic_owner_service import is_usable_contact
 from backend.services.auth_service import can_manage_documents, load_auth_context
-from backend.services.pilot_service import eligible, pilot_percent
+from backend.services.consultation_service import answer, load_owned, present, start
+from backend.services.pilot_service import (
+    eligible,
+    pilot_percent,
+    site_course_ids,
+    site_eligible,
+)
 from backend.services.purchase_service import validate_purchase_destination
-from backend.errors import ServiceUnavailableError
+from backend.services.topic_owner_service import is_usable_contact
 
 router = APIRouter(tags=["consultations"])
 _EVENTS = frozenset({"widget_impression", "widget_open", "question", "recommendation", "handoff", "error"})
@@ -36,7 +41,8 @@ class AnswerRequest(BaseModel):
 
 
 class EventRequest(BaseModel):
-    course_id: str = Field(pattern=r"^[1-9]\d{0,11}$")
+    course_id: str | None = Field(default=None, pattern=r"^[1-9]\d{0,11}$")
+    mode: str = 'course'
     event_name: str
 
 
@@ -60,17 +66,22 @@ def _limit(visitor_id: str) -> None:
 
 @router.get("/widget/config")
 def widget_config(
-    course_id: str,
     request: Request,
     response: Response,
+    course_id: str | None = None,
+    mode: str = 'course',
     session: Session = Depends(get_session),
 ) -> dict:
     visitor_id = _visitor(request, response)
-    enabled = eligible(course_id, visitor_id, session)
-    course = get_approved_course(course_id) if enabled else None
+    enabled = site_eligible(visitor_id, session) if mode == 'site' else bool(course_id and eligible(course_id, visitor_id, session))
+    qualified = course_id in site_course_ids(session) if mode == 'site' else bool(course_id and enabled)
+    course = get_approved_course(course_id) if enabled and qualified and course_id else None
     return {
         "enabled": enabled,
-        "course_id": course_id,
+        "mode": mode,
+        "course_id": course_id if course else None,
+        "history_enabled": enabled and mode == 'site',
+        "history_hours": settings.visitor_consultation_hours,
         "course_title": course.title if course else None,
         "default_prompts": [
             "推荐一门适合我的课程",
@@ -135,7 +146,11 @@ def record_widget_event(
     payload: EventRequest, request: Request, session: Session = Depends(get_session)
 ) -> Response:
     visitor_id = read_visitor_id(request)
-    _require_eligible(payload.course_id, visitor_id or "", session)
+    if payload.mode == 'site':
+        if not site_eligible(visitor_id or '', session):
+            raise HTTPException(404, '当前尚未开放咨询')
+    else:
+        _require_eligible(payload.course_id or '', visitor_id or '', session)
     if payload.event_name not in _EVENTS:
         raise HTTPException(status_code=422, detail="未知事件")
     _limit(visitor_id or "")

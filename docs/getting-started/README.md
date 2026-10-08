@@ -21,7 +21,10 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 docker run -d --name p0-pg -p 5432:5432 `
   -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=arborseek_p0 pgvector/pgvector:pg16
 
-# 4. 启动
+# 4. 数据库迁移（已有库先备份；独立发布步骤）
+python -m alembic upgrade head
+
+# 5. 启动
 uvicorn backend.main:app --reload --reload-dir backend
 ```
 

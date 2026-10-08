@@ -53,3 +53,14 @@ def eligible(course_id: str, visitor_id: str, session: Session) -> bool:
         and get_approved_course(course_id) is not None
         and course_ready(session, course_id)
     )
+
+
+def site_course_ids(session: Session) -> frozenset[str]:
+    allowed = {x.strip() for x in settings.pilot_course_ids.split(',') if x.strip()}
+    return frozenset(key for key in allowed if get_approved_course(key) is not None and course_ready(session, key))
+
+
+def site_eligible(visitor_id: str, session: Session) -> bool:
+    percent = max(0, min(100, pilot_percent(session)))
+    bucket = int.from_bytes(sha256(f'{visitor_id}:site'.encode()).digest()[:4], 'big') % 100
+    return bool(visitor_id) and bucket < percent and bool(site_course_ids(session))

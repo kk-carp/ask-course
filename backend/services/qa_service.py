@@ -5,14 +5,15 @@ import time
 from collections.abc import Iterator
 from dataclasses import dataclass
 from uuid import UUID
+
 from backend import db
+from backend.domain.followup import expand_followup_query, last_user_question
 from backend.errors import ServiceUnavailableError, UpstreamServiceError
 from backend.infra.embed import encode_query, is_loaded
+from backend.infra.generate import ChatResult, generate_answer, generate_answer_stream
 from backend.infra.metrics import record_ask_outcome, record_latency
 from backend.infra.request_context import get_request_id
-from backend.infra.generate import ChatResult, generate_answer, generate_answer_stream
 from backend.infra.retrieve import RetrievedChunk, run_retrieval
-from backend.domain.followup import expand_followup_query, last_user_question
 from backend.schemas import OwnerInfo, SourceItem
 from backend.services.conversation_service import (
     ConversationNotFoundError,
@@ -110,6 +111,9 @@ def _retrieve(
     previous_user_question: str | None = None,
     course_id: str | None = None,
 ) -> list[RetrievedChunk]:
+    from backend.services.course_scope import permits_retrieval
+    if not permits_retrieval(course_id):
+        return []
     if not allowed_spaces:
         return []
     query_text = question

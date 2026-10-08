@@ -6,29 +6,32 @@ P0 改动（相对 FDE 源）：
 2. 启动不再初始化课外语义搜索等 FDE 旁路。
 """
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+import asyncio
 import logging
 import time
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.sessions import SessionMiddleware
 
 from backend.config import assert_safe_for_environment, session_https_only, settings
 from backend.db import init_db
 from backend.infra.embed import load_model
 from backend.infra.origin_guard import OriginGuardMiddleware
-from backend.infra.rerank import load_reranker
 from backend.infra.request_context import RequestIdMiddleware
+from backend.infra.rerank import load_reranker
 from backend.routes import (
     ask,
     auth,
-    conversations,
     consultations,
+    conversations,
     documents,
     health,
     metrics,
     topic_owners,
+    widget_history,
 )
 from backend.spa import register_frontend
 
@@ -67,8 +70,19 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     _done("3/3 load reranker", t0)
 
     _log.info("startup complete (%.1fs total)", time.perf_counter() - started)
-    yield
-    # 当前 MVP 依赖进程退出释放资源，后续可在此补显式清理。
+    async def cleanup():
+        from backend.db import purge_expired_on_startup
+        while True:
+            await asyncio.sleep(300)
+            await run_in_threadpool(purge_expired_on_startup)
+
+    task = asyncio.create_task(cleanup())
+    try:
+        yield
+    finally:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
 
 
 app = FastAPI(
@@ -96,6 +110,7 @@ app.include_router(documents.router)
 app.include_router(ask.router)
 app.include_router(conversations.router)
 app.include_router(consultations.router)
+app.include_router(widget_history.router)
 app.include_router(topic_owners.router)
 
 register_frontend(app)
