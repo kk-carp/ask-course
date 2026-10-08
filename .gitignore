@@ -24,4 +24,6 @@ data/eval/pilot-results*.json
 data/eval/pilot_gold.jsonl
 backups/
 *.dump
+frontend/node_modules/
+frontend/dist/
 data/eval/load-results*.json

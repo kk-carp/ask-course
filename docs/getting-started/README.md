@@ -28,8 +28,8 @@ uvicorn backend.main:app --reload --reload-dir backend
 启动时日志会打印三步进度。`GET http://127.0.0.1:8000/health` 返回
 `{"api":true,"database":true,"embedding_loaded":true}` 即为就绪（首次会下载 BGE-M3）。
 
-浏览器打开 `http://127.0.0.1:8000/` 是 **P0 内部演示页**（游客问答 + 登录灌库），不是官网挂件。
-没有 `frontend/dist` 时，服务会直接托管 `frontend/index.html`。
+先在 `frontend/` 执行 `npm ci` 和 `npm run build`（需要 Node.js 22.12+ 或 24）。浏览器打开 `http://127.0.0.1:8000/` 仅显示右下角“问问探界”入口，点击展开 Vue 问答面板；该本地预览仍使用内部问答通道。
+登录灌库和资料管理位于 `http://127.0.0.1:8000/admin`，与官网组件分离。缺少 `frontend/dist` 时首页返回构建提示；Docker 会自动构建。
 
 ## 先跑自检（不需要数据库 / 模型 / API Key）
 

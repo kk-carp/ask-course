@@ -3,6 +3,6 @@
 import subprocess
 from pathlib import Path
 
-source = (Path(__file__).resolve().parents[1] / "frontend/index.html").read_text(encoding="utf-8")
+source = (Path(__file__).resolve().parents[1] / "frontend/admin.html").read_text(encoding="utf-8")
 script = source.split("<script>")[1].split("</script>")[0]
-raise SystemExit(subprocess.run(["node", "--check"], input=script, text=True, encoding="utf-8").returncode)
+raise SystemExit(subprocess.run(["node", "--check"], input=script, text=True, encoding="utf-8", check=False).returncode)

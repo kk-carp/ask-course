@@ -5,7 +5,7 @@ const path = require('node:path');
 const { test } = require('node:test');
 
 const root = path.resolve(__dirname, '..');
-const source = fs.readFileSync(path.join(root, 'frontend/index.html'), 'utf8');
+const source = fs.readFileSync(path.join(root, 'frontend/admin.html'), 'utf8');
 const paint = source.slice(source.indexOf('    function paintTurn('), source.indexOf('    async function readSse('));
 const escapeHtml = text => String(text ?? '').replace(/[&<>"']/g, x => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[x]));
 

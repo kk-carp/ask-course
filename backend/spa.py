@@ -1,4 +1,4 @@
-"""同源托管前端：P0 示例页优先，避免再打开统一知识助手的构建产物。"""
+"""托管 Vue 咨询组件构建产物，内部资料管理使用独立入口。"""
 
 from pathlib import Path
 
@@ -15,8 +15,8 @@ _DEMO_HEADERS = {
 
 APP_DIR = Path(__file__).resolve().parent
 SPA_DIR = APP_DIR.parent / "frontend" / "dist"
-DEMO_INDEX = APP_DIR.parent / "frontend" / "index.html"
-WIDGET_SCRIPT = APP_DIR.parent / "frontend" / "widget.js"
+DEMO_INDEX = SPA_DIR / "index.html"
+WIDGET_SCRIPT = SPA_DIR / "widget.js"
 
 
 def _demo_page() -> FileResponse:
@@ -28,14 +28,18 @@ def _demo_page() -> FileResponse:
 
 
 def register_frontend(app: FastAPI) -> None:
-    """有 P0 示例页就托管它。只有示例页缺失时才回退到 frontend/dist。"""
-    frontend_dir = DEMO_INDEX.parent
+    """官网页面仅包含咨询入口；/admin 保留独立内部管理页。"""
+    frontend_dir = APP_DIR.parent / "frontend"
     if (frontend_dir / "vendor").is_dir():
         app.mount("/vendor", StaticFiles(directory=frontend_dir / "vendor"), name="frontend-vendor")
 
     @app.get("/answer-format.js", include_in_schema=False)
     def answer_format_script() -> FileResponse:
         return FileResponse(frontend_dir / "answer-format.js", media_type="text/javascript; charset=utf-8")
+
+    @app.get("/admin", include_in_schema=False)
+    def admin_page() -> FileResponse:
+        return FileResponse(frontend_dir / "admin.html", media_type="text/html; charset=utf-8", headers=_DEMO_HEADERS)
 
     if WIDGET_SCRIPT.is_file():
         @app.get("/widget.js", include_in_schema=False)
@@ -48,31 +52,11 @@ def register_frontend(app: FastAPI) -> None:
             app.get(legacy_path, include_in_schema=False)(_demo_page)
         return
 
-    spa_index = SPA_DIR / "index.html"
-    if spa_index.is_file():
-        assets_dir = SPA_DIR / "assets"
-        if assets_dir.is_dir():
-            app.mount("/assets", StaticFiles(directory=assets_dir), name="spa-assets")
-
-        @app.get("/")
-        def spa_root() -> FileResponse:
-            return FileResponse(spa_index)
-
-        @app.get("/{full_path:path}")
-        def spa_fallback(full_path: str) -> FileResponse:
-            spa_root_dir = SPA_DIR.resolve()
-            candidate = (spa_root_dir / full_path).resolve()
-            if candidate.is_file() and (candidate == spa_root_dir or spa_root_dir in candidate.parents):
-                return FileResponse(candidate)
-            return FileResponse(spa_index)
-
-        return
-
     @app.get("/")
     def spa_missing() -> JSONResponse:
         return JSONResponse(
             status_code=503,
             content={
-                "detail": "未找到前端页面。请确认 frontend/index.html 存在，或在 frontend/ 执行 npm run build。"
+                "detail": "未找到 Vue 前端构建产物。请在 frontend/ 执行 npm ci 和 npm run build。"
             },
         )

@@ -15,6 +15,8 @@ jobs:
       - run: pip install -r requirements-ci.txt
       - run: python -m ruff check backend scripts tests
       - run: python -m pytest -q
-      - run: node --check frontend/widget.js
+      - run: npm ci --prefix frontend
+      - run: npm run build --prefix frontend
+      - run: npm test --prefix frontend
       - run: node --test tests/frontend_answer.test.cjs
       - run: python scripts/check_frontend.py
