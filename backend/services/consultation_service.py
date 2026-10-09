@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.config import settings
 from backend.models import VisitorConsultation
+from backend.domain.website_owner import WebsiteOwner, as_owner
+from backend.services.consultation_access import active_filter, load_owned
 from backend.services.approved_courses import (
     basis_level,
     load_approved_courses,
@@ -41,51 +42,34 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _expired(row: VisitorConsultation) -> bool:
-    updated = row.last_activity_at or row.updated_at or row.created_at or _now()
-    if updated.tzinfo is None:
-        updated = updated.replace(tzinfo=timezone.utc)
-    return updated < _now() - timedelta(hours=settings.visitor_consultation_hours)
-
-
-def load_owned(
-    session: Session, consultation_id: str, visitor_id: str | None
-) -> VisitorConsultation | None:
-    if not visitor_id:
-        return None
-    row = session.scalar(
-        select(VisitorConsultation).where(
-            VisitorConsultation.id == consultation_id,
-            VisitorConsultation.visitor_id == visitor_id,
-        )
-    )
-    return row if row is not None and row.deleted_at is None and not _expired(row) else None
-
-
 def get_or_create_dialogue(
-    session: Session, visitor_id: str, course_id: str | None,
+    session: Session, visitor_id: WebsiteOwner | str, course_id: str | None,
     conversation_id: str | None = None,
 ) -> VisitorConsultation:
     """自由问答与问诊复用访客状态；指定 ID 校验归属和有效期，支持跨页面。"""
     if conversation_id:
-        row = load_owned(session, conversation_id, visitor_id)
+        row = load_owned(session, conversation_id, visitor_id, lock=True)
         if row is None:
             raise ValueError("会话不存在或已过期")
         return row
     row = session.scalar(
         select(VisitorConsultation)
         .where(
-            VisitorConsultation.visitor_id == visitor_id,
+            active_filter(visitor_id),
             VisitorConsultation.course_id == course_id,
             VisitorConsultation.deleted_at.is_(None),
             VisitorConsultation.widget_session.is_(False),
         )
         .order_by(VisitorConsultation.updated_at.desc(), VisitorConsultation.created_at.desc())
         .limit(1)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
-    if row is not None and not _expired(row):
-        return row
-    row = VisitorConsultation(visitor_id=visitor_id, course_id=course_id, profile_json="{}", history_json="[]")
+    if row is not None:
+        row = load_owned(session, row.id, visitor_id, lock=True)
+        if row is not None:
+            return row
+    row = VisitorConsultation(**as_owner(visitor_id).columns(), course_id=course_id, profile_json="{}", history_json="[]")
     session.add(row)
     session.flush()
     return row
@@ -115,9 +99,12 @@ def dialogue_state(row: VisitorConsultation) -> tuple[dict, list[tuple[str, str]
 
 def complete_dialogue(
     session: Session, row: VisitorConsultation, question: str, answer_text: str,
-    *, candidate_ids: list[str] | None = None,
+    *, owner, candidate_ids: list[str] | None = None,
 ) -> dict:
     """一次提交本轮候选与预览历史；站点完整回答由幂等认领流程保存。"""
+    row = load_owned(session, row.id, owner, lock=True)
+    if row is None:
+        raise ValueError("会话不存在或已过期")
     profile, _ = dialogue_state(row)
     if candidate_ids is not None:
         profile["_candidate_course_ids"] = candidate_ids
@@ -316,9 +303,9 @@ def present(session: Session, row: VisitorConsultation) -> dict:
     }
 
 
-def start(session: Session, visitor_id: str, course_id: str | None, known_profile: dict | None = None) -> dict:
+def start(session: Session, visitor_id: WebsiteOwner | str, course_id: str | None, known_profile: dict | None = None) -> dict:
     profile = {field: validate_answer(field, value) for field, value in (known_profile or {}).items()}
-    row = VisitorConsultation(visitor_id=visitor_id, course_id=course_id, profile_json=json.dumps(profile, ensure_ascii=False))
+    row = VisitorConsultation(**as_owner(visitor_id).columns(), course_id=course_id, profile_json=json.dumps(profile, ensure_ascii=False))
     session.add(row)
     session.commit()
     session.refresh(row)
@@ -326,8 +313,11 @@ def start(session: Session, visitor_id: str, course_id: str | None, known_profil
 
 
 def answer(
-    session: Session, row: VisitorConsultation, field: str, value: object
+    session: Session, row: VisitorConsultation, field: str, value: object, *, owner
 ) -> dict:
+    row = load_owned(session, row.id, owner, lock=True)
+    if row is None:
+        raise ValueError("会话不存在或已过期")
     profile = json.loads(row.profile_json)
     if field not in FIELDS:
         raise ValueError("未知的选课信息字段。")

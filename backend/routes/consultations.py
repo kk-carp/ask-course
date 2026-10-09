@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from uuid import UUID
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 from backend.config import settings
 from backend.db import get_session
 from backend.domain.guest import issue_visitor_id, read_visitor_id
+from backend.domain.website_owner import VerifiedCustomerIdentity
 from backend.errors import ServiceUnavailableError
 from backend.infra.rate_limit import allow
 from backend.models import FunnelEvent, PilotControl
@@ -25,9 +27,11 @@ from backend.services.pilot_service import (
 )
 from backend.services.purchase_service import validate_purchase_destination
 from backend.services.topic_owner_service import is_usable_contact
+from backend.services.website_identity import resolve_owner, verified_website_identity
 
 router = APIRouter(tags=["consultations"])
 _EVENTS = frozenset({"widget_impression", "widget_open", "question", "recommendation", "handoff", "error"})
+WebsiteIdentity = Annotated[VerifiedCustomerIdentity | None, Depends(verified_website_identity)]
 
 
 class StartRequest(BaseModel):
@@ -68,12 +72,14 @@ def _limit(visitor_id: str) -> None:
 def widget_config(
     request: Request,
     response: Response,
+    identity: WebsiteIdentity,
     course_id: str | None = None,
     mode: str = 'course',
     session: Session = Depends(get_session),
 ) -> dict:
     visitor_id = _visitor(request, response)
-    enabled = site_eligible(visitor_id, session) if mode == 'site' else bool(course_id and eligible(course_id, visitor_id, session))
+    owner = resolve_owner(session, visitor_id, identity)
+    enabled = site_eligible(owner.key, session) if mode == 'site' else bool(course_id and eligible(course_id, owner.key, session))
     qualified = course_id in site_course_ids(session) if mode == 'site' else bool(course_id and enabled)
     course = get_approved_course(course_id) if enabled and qualified and course_id else None
     return {
@@ -81,7 +87,7 @@ def widget_config(
         "mode": mode,
         "course_id": course_id if course else None,
         "history_enabled": enabled and mode == 'site',
-        "history_hours": settings.visitor_consultation_hours,
+        "history_hours": int(owner.retention.total_seconds() // 3600),
         "course_title": course.title if course else None,
         "default_prompts": [
             "推荐一门适合我的课程",
@@ -99,26 +105,29 @@ def create_consultation(
     payload: StartRequest,
     request: Request,
     response: Response,
+    identity: WebsiteIdentity,
     session: Session = Depends(get_session),
 ) -> dict:
     visitor_id = _visitor(request, response)
-    _require_eligible(payload.course_id, visitor_id, session)
-    _limit(visitor_id)
+    owner = resolve_owner(session, visitor_id, identity)
+    _require_eligible(payload.course_id, owner.key, session)
+    _limit(owner.key)
     try:
-        return start(session, visitor_id, payload.course_id, payload.known_profile)
+        return start(session, owner, payload.course_id, payload.known_profile)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/consultations/{consultation_id}")
 def get_consultation(
-    consultation_id: UUID, request: Request, session: Session = Depends(get_session)
+    consultation_id: UUID, request: Request, identity: WebsiteIdentity,
+    session: Session = Depends(get_session)
 ) -> dict:
-    visitor_id = read_visitor_id(request)
-    row = load_owned(session, str(consultation_id), visitor_id or "")
+    owner = resolve_owner(session, read_visitor_id(request), identity)
+    row = load_owned(session, str(consultation_id), owner)
     if row is None:
         raise HTTPException(status_code=404, detail="问诊不存在或已过期")
-    _require_eligible(row.course_id or "", visitor_id or "", session)
+    _require_eligible(row.course_id or "", owner.key, session)
     return present(session, row)
 
 
@@ -127,36 +136,39 @@ def answer_consultation(
     consultation_id: UUID,
     payload: AnswerRequest,
     request: Request,
+    identity: WebsiteIdentity,
     session: Session = Depends(get_session),
 ) -> dict:
-    visitor_id = read_visitor_id(request)
-    row = load_owned(session, str(consultation_id), visitor_id or "")
+    owner = resolve_owner(session, read_visitor_id(request), identity)
+    row = load_owned(session, str(consultation_id), owner, lock=True)
     if row is None:
         raise HTTPException(status_code=404, detail="问诊不存在或已过期")
-    _require_eligible(row.course_id or "", visitor_id or "", session)
-    _limit(visitor_id or "")
+    _require_eligible(row.course_id or "", owner.key, session)
+    _limit(owner.key)
     try:
-        return answer(session, row, payload.field, payload.value)
+        return answer(session, row, payload.field, payload.value, owner=owner)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/widget/events", status_code=204)
 def record_widget_event(
-    payload: EventRequest, request: Request, session: Session = Depends(get_session)
+    payload: EventRequest, request: Request, identity: WebsiteIdentity,
+    session: Session = Depends(get_session)
 ) -> Response:
     visitor_id = read_visitor_id(request)
+    owner = resolve_owner(session, visitor_id, identity)
     if payload.mode == 'site':
-        if not site_eligible(visitor_id or '', session):
+        if not site_eligible(owner.key, session):
             raise HTTPException(404, '当前尚未开放咨询')
     else:
-        _require_eligible(payload.course_id or '', visitor_id or '', session)
+        _require_eligible(payload.course_id or '', owner.key, session)
     if payload.event_name not in _EVENTS:
         raise HTTPException(status_code=422, detail="未知事件")
-    _limit(visitor_id or "")
+    _limit(owner.key)
     session.add(
         FunnelEvent(
-            visitor_id=visitor_id,
+            visitor_id=visitor_id or "",  # Analytics never authorizes consultation access.
             course_id=payload.course_id,
             event_name=payload.event_name,
         )
@@ -167,11 +179,13 @@ def record_widget_event(
 
 @router.post("/purchase/{course_id}")
 def purchase_destination(
-    course_id: str, request: Request, session: Session = Depends(get_session)
+    course_id: str, request: Request, identity: WebsiteIdentity,
+    session: Session = Depends(get_session)
 ) -> dict:
     visitor_id = read_visitor_id(request)
-    _require_eligible(course_id, visitor_id or "", session)
-    _limit(visitor_id or "")
+    owner = resolve_owner(session, visitor_id, identity)
+    _require_eligible(course_id, owner.key, session)
+    _limit(owner.key)
     course = get_approved_course(course_id, verify_live=True)
     if course is None:
         raise HTTPException(status_code=404, detail="课程暂不可购买")
@@ -183,7 +197,7 @@ def purchase_destination(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     session.add(
         FunnelEvent(
-            visitor_id=visitor_id, course_id=course_id, event_name="purchase_click"
+            visitor_id=visitor_id or "", course_id=course_id, event_name="purchase_click"
         )
     )
     session.commit()

@@ -11,10 +11,12 @@ from sqlalchemy.pool import StaticPool
 from backend import db
 from backend.db import get_session
 from backend.main import app
-from backend.models import FunnelEvent, PilotControl, VisitorConsultation, VisitorTurn
+from backend.models import FunnelEvent, PilotControl, VisitorConsultation, VisitorTurn, WebsiteCustomer
 from backend.schemas import AskRequest, AskResponse
 from backend.services import widget_history as history
 from backend.services.course_scope import course_scope
+from backend.domain.website_owner import VerifiedCustomerIdentity
+from backend.services.website_identity import verified_website_identity
 
 
 @pytest.fixture
@@ -23,6 +25,7 @@ def store(monkeypatch):
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
     for table in (
+        WebsiteCustomer.__table__,
         VisitorConsultation.__table__,
         VisitorTurn.__table__,
         PilotControl.__table__,
@@ -103,6 +106,132 @@ def test_history_ownership_rename_ttl_delete_and_late_result(store):
     with store() as session, pytest.raises(HTTPException) as exc:
         history.finish_turn(session, key, visitor, request_id, "迟到的提问", answer)
     assert exc.value.status_code == 404
+
+
+def test_customer_http_access_and_association_require_verified_identity(store, monkeypatch):
+    from backend.config import settings
+    from backend.services.ask_orchestrator import _bind_selected_course
+
+    guest, device = TestClient(app), TestClient(app)
+    key, untouched = start(guest), start(guest)
+    path = f"/widget/conversations/{key}"
+    assert guest.post(path + "/associate", json={"customer_id": "forged"}).status_code == 401
+    assert guest.get("/widget/conversations", headers={"Authorization": "Bearer unverified"}).status_code == 503
+    identity = VerifiedCustomerIdentity("website-prod", "101", history.now() + timedelta(hours=1))
+    app.dependency_overrides[verified_website_identity] = lambda: identity
+    try:
+        # A valid customer identity alone cannot claim an arbitrary guest conversation.
+        assert device.post(path + "/associate").status_code == 404
+        bad_cookie = TestClient(app)
+        bad_cookie.cookies.set(settings.visitor_cookie_name, "forged")
+        assert bad_cookie.post(path + "/associate").status_code == 404
+        linked = guest.post(path + "/associate")
+        assert linked.status_code == 200, linked.text
+        assert guest.post(path + "/associate").json() == linked.json()
+        assert [r["id"] for r in device.get("/widget/conversations").json()["items"]] == [key]
+        assert device.get(path + "/messages").status_code == 200
+        assert device.patch(path, json={"title": "customer title"}).status_code == 200
+        payload = {"question": "推荐一门适合我的课程", "channel": "site_widget",
+                   "conversation_id": key, "request_id": str(uuid4())}
+        response = device.post("/ask", json=payload)
+        assert response.status_code == 200, response.text
+        assert device.post("/ask", json={**payload, "channel": None}).status_code == 400
+        assert response.json()["conversation_id"] == key
+        assert len(device.get(path + "/messages").json()["items"]) == 1
+        # Real customer orchestration, not a mock, persisted the turn and profile.
+        with store() as session:
+            row = session.get(VisitorConsultation, key)
+            assert row.customer_id and row.visitor_id is None
+            assert row.profile_json != "{}"
+        monkeypatch.setattr("backend.routes.widget_history.site_eligible", lambda *_: False)
+        assert device.get("/widget/conversations").status_code == 404
+        monkeypatch.setattr("backend.routes.widget_history.site_eligible", lambda *_: True)
+        monkeypatch.setattr("backend.routes.ask.site_eligible", lambda *_: False)
+        assert device.post("/ask", json=payload).status_code == 404
+        monkeypatch.setattr("backend.routes.ask.site_eligible", lambda *_: True)
+        # Logging out removes verified identity; the still-valid original guest cookie cannot read back.
+        app.dependency_overrides[verified_website_identity] = lambda: None
+        assert guest.get(path + "/messages").status_code == 404
+        assert guest.patch(path, json={"title": "guest"}).status_code == 404
+        assert guest.delete(path).status_code == 204
+        assert guest.post("/ask", json=payload).status_code == 404
+        assert [r["id"] for r in guest.get("/widget/conversations").json()["items"]] == [untouched]
+        with store() as session:
+            source = session.get(VisitorConsultation, key).source_visitor_id
+        with pytest.raises(HTTPException):
+            _bind_selected_course(source, key, "43")
+        # A different validated account also cannot take or modify the conversation.
+        other_identity = VerifiedCustomerIdentity("website-prod", "102", identity.valid_until)
+        app.dependency_overrides[verified_website_identity] = lambda: other_identity
+        assert guest.post(path + "/associate").status_code == 404
+        assert device.get(path + "/messages").status_code == 404
+        assert device.patch(path, json={"title": "other"}).status_code == 404
+        assert device.post("/ask", json=payload).status_code == 404
+        assert device.get("/widget/conversations").json()["items"] == []
+        assert device.delete(path).status_code == 204
+        app.dependency_overrides[verified_website_identity] = lambda: identity
+        assert device.get(path + "/messages").status_code == 200
+        # Verification expiry denies instead of falling back to the cookie.
+        invalid = VerifiedCustomerIdentity("website-prod", "101", history.now() - timedelta(seconds=1))
+        app.dependency_overrides[verified_website_identity] = lambda: invalid
+        assert guest.get("/widget/conversations").status_code == 401
+        assert guest.post("/ask", json=payload).status_code == 401
+        assert guest.cookies.get(settings.visitor_cookie_name)
+    finally:
+        app.dependency_overrides.pop(verified_website_identity, None)
+
+
+def test_legacy_consultations_share_customer_authorization(store, monkeypatch):
+    monkeypatch.setattr("backend.routes.consultations.eligible", lambda *_: True)
+    monkeypatch.setattr("backend.routes.ask.eligible", lambda *_: True)
+    identity = VerifiedCustomerIdentity("website-prod", "101", history.now() + timedelta(hours=1))
+    app.dependency_overrides[verified_website_identity] = lambda: identity
+    customer, device = TestClient(app), TestClient(app)
+    try:
+        result = customer.post("/consultations", json={"course_id": "43"})
+        assert result.status_code == 200, result.text
+        key = result.json()["id"]
+        assert device.get(f"/consultations/{key}").status_code == 200
+        assert device.post(f"/consultations/{key}/answers", json={"field": "basis", "value": "basic"}).status_code == 200
+        assert customer.get("/widget/config?mode=site").json()["history_hours"] == 90 * 24
+        payload = {"question": "推荐一门适合我的课程", "course_id": "43",
+                   "channel": "course_page", "conversation_id": key}
+        result = device.post("/ask", json=payload)
+        assert result.status_code == 200, result.text
+        assert result.json()["conversation_id"] == key
+        app.dependency_overrides[verified_website_identity] = lambda: None
+        assert customer.get(f"/consultations/{key}").status_code == 404
+        assert customer.post(f"/consultations/{key}/answers", json={"field": "basis", "value": "none"}).status_code == 404
+        assert customer.post("/ask", json=payload).status_code == 404
+    finally:
+        app.dependency_overrides.pop(verified_website_identity, None)
+
+
+def test_customer_verification_expiring_during_stream_cannot_save_final(store, monkeypatch):
+    clock = [history.now()]
+    monkeypatch.setattr("backend.domain.website_owner.utcnow", lambda: clock[0])
+    identity = VerifiedCustomerIdentity("website-prod", "101", clock[0] + timedelta(minutes=1))
+    app.dependency_overrides[verified_website_identity] = lambda: identity
+
+    def answer(payload, _identity):
+        clock[0] += timedelta(minutes=2)
+        yield "final", AskResponse(answer="expired answer", hit=True, conversation_id=payload.conversation_id)
+
+    monkeypatch.setattr("backend.routes.ask.iter_ask_turn", answer)
+    try:
+        client = TestClient(app)
+        key = start(client)
+        response = client.post("/ask/stream", json={
+            "question": "hello", "channel": "site_widget", "conversation_id": key,
+            "request_id": str(uuid4()),
+        })
+        assert '"status": 401' in response.text
+        assert "event: final" not in response.text
+        with store() as session:
+            assert session.scalar(select(VisitorTurn)).response_json is None
+            assert session.get(VisitorConsultation, key).history_json == "[]"
+    finally:
+        app.dependency_overrides.pop(verified_website_identity, None)
 
 
 def test_turn_idempotency_conflict_retry_and_expiration(store):

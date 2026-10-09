@@ -19,6 +19,8 @@ from backend.schemas import AskResponse
 from backend.services import widget_history as history
 from backend.services.consultation_service import load_owned
 from backend.services.retention_service import purge_expired
+from backend.domain.website_owner import VerifiedCustomerIdentity
+from backend.services.website_identity import customer_owner
 
 
 @pytest.fixture
@@ -50,6 +52,150 @@ def test_customer_identity_is_provider_scoped_and_unique(ownership_store):
                 session.add(WebsiteCustomer(provider="website-prod", external_user_id="101"))
                 session.flush()
         assert len(list(session.scalars(select(WebsiteCustomer)))) == 2
+
+
+def verified(external_id="101"):
+    return VerifiedCustomerIdentity("website-prod", external_id,
+                                    datetime.now(timezone.utc) + timedelta(hours=1))
+
+
+def test_association_is_exclusive_idempotent_and_preserves_activity(ownership_store):
+    with ownership_store() as session:
+        key = history.create(session, "visitor-a", str(uuid4()))["id"]
+        other = history.create(session, "visitor-a", str(uuid4()))["id"]
+        request_id = str(uuid4())
+        _, _, claim = history.begin_turn(session, key, "visitor-a", request_id, "robot")
+        history.finish_turn(session, key, "visitor-a", request_id, "robot",
+                            AskResponse(answer="saved", hit=True), claim)
+        row = session.get(VisitorConsultation, key)
+        activity, updated = row.last_activity_at, row.updated_at
+        owner, result = history.associate_current(session, verified(), "visitor-a", key)
+        assert result["id"] == key
+        assert history.associate_current(session, verified(), "visitor-a", key)[1] == result
+        assert len(list(session.scalars(select(WebsiteCustomer)))) == 1
+        assert history.owned(session, key, owner).last_activity_at == activity
+        assert row.updated_at == updated
+        assert row.visitor_id is None and row.source_visitor_id == "visitor-a"
+        assert history.owned(session, other, "visitor-a")
+        assert session.scalar(select(VisitorTurn)).response_json is not None
+        for intruder in ("visitor-a", "visitor-b", customer_owner(session, verified("102"))):
+            for operation in (
+                lambda: history.owned(session, key, intruder),
+                lambda: history.rename(session, key, intruder, "stolen"),
+                lambda: history.begin_turn(session, key, intruder, str(uuid4()), "robot"),
+                lambda: history.finish_turn(session, key, intruder, request_id, "robot",
+                                          AskResponse(answer="stolen", hit=True), claim),
+            ):
+                with pytest.raises(HTTPException) as exc:
+                    operation()
+                assert exc.value.status_code == 404
+            history.remove(session, key, intruder)
+        assert history.owned(session, key, owner).deleted_at is None
+        assert [x.id for x in history.listing(session, owner, 0, 10)] == [key]
+        request_id = str(uuid4())
+        _, _, claim = history.begin_turn(session, key, owner, request_id, "next")
+        history.finish_turn(session, key, owner, request_id, "next", AskResponse(answer="new", hit=True), claim)
+        history.rename(session, key, owner, "mine")
+        history.remove(session, key, owner)
+        assert history.listing(session, owner, 0, 10) == []
+
+
+@pytest.mark.parametrize("state", ["foreign", "expired", "deleted", "processing", "missing-cookie", "missing-id"])
+def test_association_denials_do_not_create_customers_or_change_guest(ownership_store, state):
+    with ownership_store() as session:
+        key = history.create(session, "visitor-a", str(uuid4()))["id"]
+        row = session.get(VisitorConsultation, key)
+        if state == "expired":
+            row.last_activity_at = history.cutoff() - timedelta(seconds=1)
+        if state == "deleted":
+            row.deleted_at = history.now()
+        session.commit()
+        if state == "processing":
+            history.begin_turn(session, key, "visitor-a", str(uuid4()), "robot")
+        guest = "visitor-b" if state == "foreign" else None if state == "missing-cookie" else "visitor-a"
+        with pytest.raises(HTTPException) as exc:
+            history.associate_current(session, verified(), guest, "missing" if state == "missing-id" else key)
+        assert exc.value.status_code == (409 if state == "processing" else 404)
+        assert list(session.scalars(select(WebsiteCustomer))) == []
+        assert session.get(VisitorConsultation, key).visitor_id == "visitor-a"
+
+
+def test_identity_only_and_stale_claim_transfer(ownership_store):
+    with ownership_store() as session:
+        owner, result = history.associate_current(session, verified(), None)
+        assert result is None
+        assert list(session.scalars(select(VisitorConsultation))) == []
+        key = history.create(session, "visitor-a", str(uuid4()))["id"]
+        request_id = str(uuid4())
+        _, _, claim = history.begin_turn(session, key, "visitor-a", request_id, "robot")
+        session.get(VisitorTurn, claim).created_at = history.now() - timedelta(minutes=16)
+        session.commit()
+        owner, _ = history.associate_current(session, verified(), "visitor-a", key)
+        assert session.get(VisitorTurn, claim) is None
+        with pytest.raises(HTTPException):
+            history.finish_turn(session, key, "visitor-a", request_id, "robot",
+                                AskResponse(answer="late", hit=True), claim)
+        assert history.owned(session, key, owner).history_json == "[]"
+
+
+def test_owner_ttl_and_expired_verification_fail_closed(ownership_store):
+    from dataclasses import replace
+
+    with ownership_store() as session:
+        owner = customer_owner(session, verified())
+        session.commit()
+        key = history.create(session, owner, str(uuid4()))["id"]
+        row = session.get(VisitorConsultation, key)
+        row.last_activity_at = history.now() - timedelta(days=2)
+        session.commit()
+        activity = row.last_activity_at
+        assert history.owned(session, key, owner)
+        history.rename(session, key, owner, "old but active")
+        assert row.last_activity_at == activity
+        expired = replace(owner, valid_until=history.now() - timedelta(seconds=1))
+        with pytest.raises(HTTPException) as exc:
+            history.remove(session, key, expired)
+        assert exc.value.status_code == 401
+        assert row.deleted_at is None
+        row.last_activity_at = history.now() - timedelta(days=91)
+        session.commit()
+        assert history.listing(session, owner, 0, 10) == []
+        with pytest.raises(HTTPException) as exc:
+            history.owned(session, key, owner)
+        assert exc.value.status_code == 404
+
+
+def test_stale_legacy_row_cannot_write_after_association(ownership_store):
+    from backend.services.consultation_service import answer, complete_dialogue
+
+    with ownership_store() as session:
+        row = VisitorConsultation(visitor_id="visitor-a", course_id="43")
+        session.add(row)
+        session.commit()
+        history.associate_current(session, verified(), "visitor-a", row.id)
+        for operation in (
+            lambda: answer(session, row, "goal", "robot", owner="visitor-a"),
+            lambda: complete_dialogue(session, row, "robot", "late", owner="visitor-a"),
+        ):
+            with pytest.raises(ValueError):
+                operation()
+        session.refresh(row)
+        assert row.profile_json == "{}" and row.history_json == "[]"
+
+
+def test_association_rollback_restores_guest_even_after_flush(ownership_store, monkeypatch):
+    with ownership_store() as session:
+        key = history.create(session, "visitor-a", str(uuid4()))["id"]
+
+        def failed_commit():
+            session.flush()
+            raise RuntimeError("commit failed")
+
+        monkeypatch.setattr(session, "commit", failed_commit)
+        with pytest.raises(RuntimeError, match="commit failed"):
+            history.associate_current(session, verified(), "visitor-a", key)
+        assert history.owned(session, key, "visitor-a").customer_id is None
+        assert list(session.scalars(select(WebsiteCustomer))) == []
 
 
 @pytest.mark.parametrize("provider,external_id", [("", "101"), ("   ", "101"), ("site", ""), ("site", "   ")])

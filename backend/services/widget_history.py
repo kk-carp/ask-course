@@ -7,27 +7,22 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm.attributes import flag_modified
 
 from backend.config import settings
+from backend.domain.website_owner import as_owner
 from backend.models import VisitorConsultation, VisitorTurn
 from backend.schemas import AskResponse
-from backend.services.consultation_service import load_owned
+from backend.services.consultation_access import active_filter, load_owned
+from backend.services.website_identity import customer_owner
 
 
 def now():
     return datetime.now(timezone.utc)
 
 
-def owned(session, conversation_id, visitor_id, *, lock=False):
-    if lock:
-        # Refresh identities after acquiring a lock (a concurrent delete may have committed).
-        session.scalar(
-            select(VisitorConsultation)
-            .where(VisitorConsultation.id == conversation_id)
-            .with_for_update()
-            .execution_options(populate_existing=True)
-        )
-    row = load_owned(session, conversation_id, visitor_id)
+def owned(session, conversation_id, owner, *, lock=False):
+    row = load_owned(session, conversation_id, owner, lock=lock)
     if row is None or not row.widget_session:
         raise HTTPException(404, "会话不存在或已过期")
     return row
@@ -43,16 +38,16 @@ def descriptor(row):
     }
 
 
-def create(session, visitor_id, request_id):
+def create(session, owner, request_id):
     previous = session.scalar(
         select(VisitorConsultation).where(
             VisitorConsultation.creation_key == request_id
         )
     )
     if previous:
-        return descriptor(owned(session, previous.id, visitor_id))
+        return descriptor(owned(session, previous.id, owner))
     row = VisitorConsultation(
-        visitor_id=visitor_id,
+        **as_owner(owner).columns(),
         widget_session=True,
         creation_key=request_id,
         last_activity_at=now(),
@@ -69,12 +64,12 @@ def create(session, visitor_id, request_id):
         )
         if previous is None:
             raise
-        return descriptor(owned(session, previous.id, visitor_id))
+        return descriptor(owned(session, previous.id, owner))
     return descriptor(row)
 
 
-def begin_turn(session, conversation_id, visitor_id, request_id, question):
-    row = owned(session, conversation_id, visitor_id, lock=True)
+def begin_turn(session, conversation_id, owner, request_id, question):
+    row = owned(session, conversation_id, owner, lock=True)
     pending = list(
         session.scalars(
             select(VisitorTurn).where(
@@ -127,9 +122,9 @@ def begin_turn(session, conversation_id, visitor_id, request_id, question):
 
 
 def finish_turn(
-    session, conversation_id, visitor_id, request_id, question, response, claim_id=None
+    session, conversation_id, owner, request_id, question, response, claim_id=None
 ):
-    row = owned(session, conversation_id, visitor_id, lock=True)
+    row = owned(session, conversation_id, owner, lock=True)
     turn = session.scalar(
         select(VisitorTurn).where(
             VisitorTurn.conversation_id == row.id, VisitorTurn.request_id == request_id
@@ -180,10 +175,10 @@ def finish_turn(
     session.commit()
 
 
-def abandon_turn(session, conversation_id, visitor_id, request_id, claim_id=None):
+def abandon_turn(session, conversation_id, owner, request_id, claim_id=None):
     # Preserve completed answers; failed requests can safely retry with the same key.
     try:
-        row = owned(session, conversation_id, visitor_id, lock=True)
+        row = owned(session, conversation_id, owner, lock=True)
     except HTTPException:
         session.rollback()
         return
@@ -203,3 +198,78 @@ def abandon_turn(session, conversation_id, visitor_id, request_id, claim_id=None
 
 def cutoff():
     return now() - timedelta(hours=settings.visitor_consultation_hours)
+
+
+def listing(session, owner, offset, limit):
+    return list(session.scalars(
+        select(VisitorConsultation)
+        .where(active_filter(owner), VisitorConsultation.widget_session.is_(True))
+        .order_by(VisitorConsultation.last_activity_at.desc(), VisitorConsultation.id.desc())
+        .offset(offset).limit(limit + 1)
+    ))
+
+
+def rename(session, conversation_id, owner, title):
+    row = owned(session, conversation_id, owner, lock=True)
+    row.last_activity_at = row.last_activity_at or row.updated_at or row.created_at
+    row.title, row.custom_title = title, True
+    session.commit()
+    return descriptor(row)
+
+
+def remove(session, conversation_id, owner):
+    # Missing, expired, deleted and foreign IDs have the same idempotent outcome.
+    row = load_owned(session, conversation_id, owner, lock=True)
+    if row is not None and row.widget_session:
+        row.deleted_at = now()
+        session.commit()
+
+
+def associate_current(session, identity, visitor_id, conversation_id=None):
+    """Called only after real identity verification and signed guest-cookie reading.
+
+    This service owns the transaction. Commit once here, including customer creation;
+    all denial paths roll back. Never scan or merge other guest consultations.
+    """
+    try:
+        owner = customer_owner(session, identity)
+        if conversation_id is None:
+            session.commit()
+            return owner, None
+        if not visitor_id:
+            raise HTTPException(404, "会话不存在或已过期")
+        row = session.scalar(select(VisitorConsultation).where(
+            VisitorConsultation.id == conversation_id,
+        ).with_for_update().execution_options(populate_existing=True))
+        owner.validate()
+        if row is None:
+            raise HTTPException(404, "会话不存在或已过期")
+        if row.customer_id == owner.customer_id and row.source_visitor_id == visitor_id:
+            # Replays still require the original signed cookie and active ownership.
+            if load_owned(session, row.id, owner) is None:
+                raise HTTPException(404, "会话不存在或已过期")
+            session.commit()
+            return owner, descriptor(row)
+        if load_owned(session, row.id, visitor_id) is None:
+            raise HTTPException(404, "会话不存在或已过期")
+        pending = list(session.scalars(select(VisitorTurn).where(
+            VisitorTurn.conversation_id == row.id, VisitorTurn.response_json.is_(None),
+        )))
+        for turn in pending:
+            created = turn.created_at
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            if created >= now() - timedelta(minutes=15):
+                raise HTTPException(409, "当前提问仍在处理中，请完成后重试关联")
+        for turn in pending:
+            session.delete(turn)
+        row.source_visitor_id = visitor_id
+        row.visitor_id, row.customer_id = None, owner.customer_id
+        # Ownership changes must not extend retention, including legacy fallback.
+        row.last_activity_at = row.last_activity_at or row.updated_at or row.created_at
+        flag_modified(row, "updated_at")
+        session.commit()
+        return owner, descriptor(row)
+    except Exception:
+        session.rollback()
+        raise

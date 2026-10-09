@@ -24,6 +24,7 @@ from fastapi import HTTPException
 
 from backend import db
 from backend.config import settings
+from backend.domain.website_owner import WebsiteOwner, as_owner
 from backend.errors import ServiceUnavailableError, UpstreamServiceError
 from backend.infra.metrics import record_latency
 from backend.models import VisitorConsultation
@@ -83,6 +84,11 @@ class AskIdentity:
     visitor_id: str | None
     course_ids: frozenset[str] | None = None
     first_turn: bool | None = None
+    website_owner: WebsiteOwner | None = None
+
+    @property
+    def consultation_owner(self):
+        return self.website_owner or (as_owner(self.visitor_id) if self.visitor_id else None)
 
 
 def related_course_card(
@@ -158,7 +164,7 @@ def apply_handoff(
 
 
 def _prepare_guest_dialogue(
-    visitor_id: str, payload: AskRequest, *, intent: Intent, understanding: Understanding | None = None
+    visitor_id: WebsiteOwner | str, payload: AskRequest, *, intent: Intent, understanding: Understanding | None = None
 ) -> tuple[str, list[tuple[str, str]], dict | None, str | None]:
     db.init_engine()
     if db.SessionLocal is None:
@@ -171,7 +177,7 @@ def _prepare_guest_dialogue(
         )
         if fresh_undirected:
             row = VisitorConsultation(
-                visitor_id=visitor_id,
+                **as_owner(visitor_id).columns(),
                 course_id=payload.course_id,
                 profile_json="{}",
                 history_json="[]",
@@ -232,16 +238,16 @@ def _prepare_guest_dialogue(
 
 
 def _bind_selected_course(
-    visitor_id: str, dialogue_id: str, course_id: str | None
+    visitor_id: WebsiteOwner | str, dialogue_id: str, course_id: str | None
 ) -> None:
     """把本轮唯一匹配的课写入游客会话，供后续「这个课 / 优惠 / 付款」沿用。"""
     key = (course_id or "").strip()
     if not key or db.SessionLocal is None:
         return
     with db.SessionLocal() as session:
-        row = load_owned(session, dialogue_id, visitor_id)
+        row = load_owned(session, dialogue_id, visitor_id, lock=True)
         if row is None:
-            return
+            raise HTTPException(404, "会话不存在或已过期")
         profile = json.loads(row.profile_json or "{}")
         if profile.get("_selected_course_id") == key:
             return
@@ -401,6 +407,8 @@ def iter_ask_turn(payload: AskRequest, identity: AskIdentity):
                 break
             finally:
                 course_scope.reset(token)
+            if identity.consultation_owner:
+                identity.consultation_owner.validate()
             yield item
     finally:
         inner.close()
@@ -413,10 +421,10 @@ def iter_ask_turn(payload: AskRequest, identity: AskIdentity):
 def _iter_ask_turn(payload: AskRequest, identity: AskIdentity):
     """每轮只解析一次，统一保存历史、候选顺序和本次理解的模型用量。"""
     profile, history = {}, []
-    if identity.visitor_id and payload.conversation_id:
+    if identity.consultation_owner and payload.conversation_id:
         db.init_engine()
         with db.SessionLocal() as session:
-            row = load_owned(session, str(payload.conversation_id), identity.visitor_id)
+            row = load_owned(session, str(payload.conversation_id), identity.consultation_owner)
             if row is None:
                 raise HTTPException(status_code=404, detail="会话不存在或已过期")
             profile, history = dialogue_state(row)
@@ -429,8 +437,8 @@ def _iter_ask_turn(payload: AskRequest, identity: AskIdentity):
     record_latency("ask_understanding", (time.perf_counter() - t0) * 1000)
     if len(understanding.compare_ids) >= 2:
         dialogue_id = None
-        if identity.visitor_id:
-            dialogue_id, _, _, _ = _prepare_guest_dialogue(identity.visitor_id, payload, intent=Intent.content, understanding=understanding)
+        if identity.consultation_owner:
+            dialogue_id, _, _, _ = _prepare_guest_dialogue(identity.consultation_owner, payload, intent=Intent.content, understanding=understanding)
         cards, blocks, evidence = [], [], []
         catalog = {item.course_id: item for item in load_recommendable_courses()}
         for key in understanding.compare_ids:
@@ -459,13 +467,15 @@ def _iter_ask_turn(payload: AskRequest, identity: AskIdentity):
     response.completion_tokens += understanding.completion_tokens
     if is_usable_contact(settings.handoff_fallback_contact):
         response.fallback_contact = settings.handoff_fallback_contact
-    if identity.visitor_id and response.conversation_id:
+    if identity.consultation_owner and response.conversation_id:
         key = str(response.conversation_id)
         with db.SessionLocal() as session:
-            row = load_owned(session, key, identity.visitor_id)
+            row = load_owned(session, key, identity.consultation_owner, lock=True)
+            if row is None:
+                raise HTTPException(404, "会话不存在或已过期")
             if row:
                 saved = complete_dialogue(
-                    session, row, payload.question, response.answer,
+                    session, row, payload.question, response.answer, owner=identity.consultation_owner,
                     candidate_ids=[item.id for item in response.related_courses]
                     if response.related_courses and response.intent in {"recommend", "compare"} else None,
                 )
@@ -501,6 +511,7 @@ def _iter_questions(payload: AskRequest, identity: AskIdentity, understanding: U
     # 会话保持串行，避免课程绑定和历史写入相互覆盖。
     parallel = (
         identity.user_id is None and bool(understanding.course_id)
+        and not (identity.website_owner and identity.website_owner.customer_id)
         and understanding.intent == "content" and not understanding.profile_updates
         and all(
             classify_intent(q) is Intent.content and not looks_like_profile(q, None)
@@ -509,10 +520,10 @@ def _iter_questions(payload: AskRequest, identity: AskIdentity, understanding: U
         )
     )
     guest_context = None
-    if parallel and identity.visitor_id:
+    if parallel and identity.consultation_owner:
         try:
             guest_context = _prepare_guest_dialogue(
-                identity.visitor_id, payload, intent=Intent.content, understanding=understanding,
+                identity.consultation_owner, payload, intent=Intent.content, understanding=understanding,
             )
         except ServiceUnavailableError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -601,7 +612,7 @@ def _run_single_question(
     allowed_spaces = identity.allowed_spaces
     user_id = identity.user_id
     user_role = identity.user_role
-    visitor_id = identity.visitor_id
+    visitor_id = identity.consultation_owner
 
     intent = classify_intent(payload.question)
     if intent is Intent.content and understanding and len(understanding.questions) == 1:
