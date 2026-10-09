@@ -49,8 +49,10 @@ def _expired(row: VisitorConsultation) -> bool:
 
 
 def load_owned(
-    session: Session, consultation_id: str, visitor_id: str
+    session: Session, consultation_id: str, visitor_id: str | None
 ) -> VisitorConsultation | None:
+    if not visitor_id:
+        return None
     row = session.scalar(
         select(VisitorConsultation).where(
             VisitorConsultation.id == consultation_id,

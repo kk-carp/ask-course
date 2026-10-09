@@ -7,8 +7,10 @@ from uuid import uuid4
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -186,12 +188,41 @@ class TopicOwner(Base):
     contact: Mapped[str] = mapped_column(String(255), nullable=False)
 
 
+class WebsiteCustomer(Base):
+    """Website identity, separate from internal staff and without credentials."""
+
+    __tablename__ = "website_customers"
+    __table_args__ = (
+        UniqueConstraint("provider", "external_user_id", name="uq_website_customer_identity"),
+        CheckConstraint("length(trim(provider)) > 0", name="ck_website_customer_provider"),
+        CheckConstraint("length(trim(external_user_id)) > 0", name="ck_website_customer_external_id"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    external_user_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class VisitorConsultation(Base):
-    """匿名访客的问诊画像与最近对话；不进入知识库。"""
+    """Website consultation owned by exactly one visitor or customer."""
 
     __tablename__ = "visitor_consultations"
+    __table_args__ = (
+        CheckConstraint(
+            "(visitor_id IS NOT NULL AND customer_id IS NULL) OR "
+            "(visitor_id IS NULL AND customer_id IS NOT NULL)",
+            name="ck_consultation_one_owner",
+        ),
+        Index("ix_consultations_customer_activity", "customer_id", "last_activity_at", "id"),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    visitor_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    visitor_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    customer_id: Mapped[str | None] = mapped_column(
+        ForeignKey("website_customers.id", name="fk_consultation_customer", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    # Provenance only: never use this field to authorise visitor access.
+    source_visitor_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     course_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     profile_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     history_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")

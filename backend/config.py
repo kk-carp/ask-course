@@ -118,6 +118,15 @@ class Settings(BaseSettings):
     pilot_course_ids: str = "42,43,99"
     pilot_percent: int = 0
     visitor_consultation_hours: int = 24
+    # Website customers use a separate retention policy from anonymous visitors.
+    customer_consultation_days: int = 90
+
+    @field_validator("customer_consultation_days")
+    @classmethod
+    def _positive_customer_retention(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("CUSTOMER_CONSULTATION_DAYS 必须大于 0")
+        return value
 
     @field_validator("app_env")
     @classmethod

@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from backend.config import settings
@@ -34,8 +34,13 @@ def purge_expired(
         session.delete(conversation)
 
     consultation_cutoff = moment - timedelta(hours=settings.visitor_consultation_hours)
-    expired = or_(VisitorConsultation.deleted_at.is_not(None),
-                  func.coalesce(VisitorConsultation.last_activity_at, VisitorConsultation.updated_at) < consultation_cutoff)
+    customer_cutoff = moment - timedelta(days=settings.customer_consultation_days)
+    activity = func.coalesce(VisitorConsultation.last_activity_at, VisitorConsultation.updated_at)
+    expired = or_(
+        VisitorConsultation.deleted_at.is_not(None),
+        and_(VisitorConsultation.visitor_id.is_not(None), activity < consultation_cutoff),
+        and_(VisitorConsultation.customer_id.is_not(None), activity < customer_cutoff),
+    )
     ids = select(VisitorConsultation.id).where(expired)
     session.execute(delete(VisitorTurn).where(VisitorTurn.conversation_id.in_(ids)))
     consultations = session.execute(delete(VisitorConsultation).where(expired)).rowcount or 0
