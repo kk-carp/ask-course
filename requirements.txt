@@ -1,37 +1,4 @@
-# ============================================================
-# P0 依赖：与统一知识助手（FDE）保持一致，仅去掉 P0 用不到的部分
-# ============================================================
+# 完整运行环境：复用轻量依赖，再安装本地向量与重排模型依赖。
+-r requirements-ci.txt
 
-# --- Web 框架与鉴权 ---
-fastapi==0.136.3
-uvicorn[standard]==0.48.0
-itsdangerous==2.2.0
-bcrypt==5.0.0
-
-# --- 数据库与向量 ---
-sqlalchemy==2.0.51
-alembic==1.18.4
-psycopg[binary]==3.3.5
-pgvector==0.5.0
-
-# --- 配置与请求 ---
-pydantic-settings==2.14.2
-python-multipart==0.0.30
-
-# --- 文档解析（课程内容入库） ---
-python-docx==1.2.0
-python-pptx==1.0.2
-pypdf==6.14.2
-
-# --- 检索内核：向量 + 重排 + 中文分词 ---
 sentence-transformers==4.1.0
-jieba==0.42.1
-
-# --- 对话模型（OpenAI 兼容；P0 指向 openai.arborseek.com 网关） ---
-openai==2.43.0
-httpx==0.28.1
-
-# --- 开发与自检 ---
-pytest==8.3.4
-ruff==0.15.16
-

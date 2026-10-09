@@ -19,7 +19,7 @@ from backend.infra.chunker import split_text
 from backend.infra.embed import encode_documents, is_loaded
 from backend.infra.parsers import parse_document
 from backend.infra.storage import save_upload
-from backend.models import Chunk, Document, DocumentStatus
+from backend.models import Chunk, Document, DocumentStatus, Space
 
 ACTIVE_STATUSES = (DocumentStatus.ready.value, DocumentStatus.processing.value)
 _log = logging.getLogger("backend.ingest")
@@ -92,20 +92,26 @@ def guard_duplicate_or_replace(
     space_id: str,
     content_hash: str,
     replace: bool,
-) -> None:
-    """无重复则通过；replace 时先下线同哈希旧文档；否则抛 DuplicateDocumentError。"""
+) -> dict[str, str]:
+    """Capture replacement targets without making the current knowledge unavailable."""
     existing = find_active_duplicate(session, space_id, content_hash)
     if existing is None:
-        return
+        return {}
     if not replace:
         raise DuplicateDocumentError(
             existing_id=str(existing.id),
             existing_title=str(existing.title),
             space_id=space_id,
         )
-    for document in session.scalars(_active_duplicate_stmt(space_id, content_hash)).all():
-        document.status = DocumentStatus.offline.value
-        document.error = None
+    return {
+        document.id: document.status
+        for document in session.scalars(_active_duplicate_stmt(space_id, content_hash))
+    }
+
+
+def _lock_space(session, space_id: str) -> None:
+    # Serialise short publication transactions, not parsing or embedding work.
+    session.scalar(select(Space).where(Space.id == space_id).with_for_update())
 
 
 def ingest_document(file: UploadFile, space_id: str, *, replace: bool = False, course_id: str | None = None) -> DocumentResult:
@@ -126,7 +132,8 @@ def ingest_document(file: UploadFile, space_id: str, *, replace: bool = False, c
     file.file.seek(0)
 
     with db.SessionLocal() as session:
-        guard_duplicate_or_replace(
+        _lock_space(session, space_id)
+        replacement_targets = guard_duplicate_or_replace(
             session,
             space_id=space_id,
             content_hash=digest,
@@ -142,7 +149,8 @@ def ingest_document(file: UploadFile, space_id: str, *, replace: bool = False, c
             course_id=course_id,
             title=stored_file.original_name,
             file_path=str(stored_file.path),
-            content_hash=digest,
+            # Keep the active hash reserved by the old document until publication.
+            content_hash=None if replacement_targets else digest,
             status=DocumentStatus.processing.value,
         )
         session.add(document)
@@ -156,7 +164,6 @@ def ingest_document(file: UploadFile, space_id: str, *, replace: bool = False, c
                     existing_id=str(again.id),
                     existing_title=str(again.title),
                     space_id=space_id,
-                    course_id=course_id,
                 ) from exc
             raise
         session.refresh(document)
@@ -192,7 +199,10 @@ def ingest_document(file: UploadFile, space_id: str, *, replace: bool = False, c
             raise RuntimeError("切片数与向量数不一致")
 
         with db.SessionLocal() as session:
-            document = session.get(Document, document_id)
+            _lock_space(session, space_id)
+            document = session.scalar(
+                select(Document).where(Document.id == document_id).with_for_update()
+            )
             if document is None:
                 raise RuntimeError("文档记录不存在")
             if document.status != DocumentStatus.processing.value:
@@ -204,6 +214,22 @@ def ingest_document(file: UploadFile, space_id: str, *, replace: bool = False, c
                     status=document.status,
                     chunk_count=0,
                 )
+
+            if replacement_targets:
+                current = {
+                    item.id: item.status
+                    for item in session.scalars(
+                        _active_duplicate_stmt(space_id, digest).with_for_update()
+                    )
+                }
+                if current != replacement_targets:
+                    raise ValueError("原文档状态已变化，请确认资料后重新上传")
+                for old_id in replacement_targets:
+                    old = session.get(Document, old_id)
+                    old.status = DocumentStatus.offline.value
+                    old.error = None
+                # Flush first so the partial unique index frees the old hash.
+                session.flush()
 
             for index, (content, embedding) in enumerate(zip(chunks, embeddings)):
                 chunk = Chunk(
@@ -218,6 +244,7 @@ def ingest_document(file: UploadFile, space_id: str, *, replace: bool = False, c
                 update_chunk_content_tsv(session, chunk.id, content)
 
             document.status = DocumentStatus.ready.value
+            document.content_hash = digest
             document.error = None
             session.commit()
 

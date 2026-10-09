@@ -22,7 +22,7 @@
 
 前端使用 Vue 3 + Vite + Ant Design Vue 4.2.6，与官网公开构建产物中的组件库版本一致（2026-10-08 核验）。按钮、输入框、历史浮层、操作菜单及重命名弹窗使用组件库；通过 StyleProvider 将组件样式注入 Shadow DOM，弹层同样挂载在组件内部。
 
-历史展示由用户问题提炼的主题短句，支持搜索、重命名和删除；删除当前会话后回到新会话。当前历史仅驻留本次页面内存，刷新后清空；不调用内部账号历史接口，也不代表已实现官网会员历史或服务端删除。
+历史展示由用户问题提炼的主题短句，支持搜索、重命名和删除；删除当前会话后回到新会话。`data-mode="site"` 模式使用 `/widget/conversations` 持久化本人游客历史，支持刷新恢复、服务端改名与删除，默认保留 24 小时。内部 `data-preview="true"` 演示仍使用页面内存历史，刷新即清空。官网会员历史尚未实现，不调用内部账号历史接口代替。
 
 Node.js 22.12+（或 24）环境中执行：
 
@@ -35,9 +35,9 @@ npm test
 
 FastAPI 托管 `frontend/dist`，每次修改源码后重新构建。Docker 镜像自动进行前端构建。开发热更新可运行 `npm run dev`，默认通过 Vite 将 API 转发到 `http://127.0.0.1:8000`。构建后的 `dist/widget.js` 为包含 Vue 运行时的独立 IIFE，官网无需安装 Vue，也无需改造现有框架。
 
-启动后打开首页，点击右下角“问问探界”查看咨询面板。可验证快捷提问、Enter 发送、Shift + Enter 换行、收起再展开保留当前消息和草稿，以及顶部“新会话”重置对话；左侧“对话历史”可切换本次页面访问中的咨询，刷新后清空。手机宽度下展开为全屏，收起后恢复页面滚动；回答依据默认折叠。
+启动后打开首页，点击右下角“问问探界”查看咨询面板。可验证快捷提问、Enter 发送、Shift + Enter 换行、收起再展开保留当前消息和草稿，以及顶部“新会话”重置对话；左侧“对话历史”可切换咨询。内部预览刷新后清空，正式站点模式按服务端归属与有效期恢复。手机宽度下展开为全屏，收起后恢复页面滚动；回答依据默认折叠。
 
-首页脚本的 `data-preview="true"` 仅用于本项目演示路由，沿用内部演示的 `internal_tool` 问答通道。官网课程页仍使用课程 ID 配置和服务端灰度门禁；全站游客接口、官网会员身份及历史恢复尚未实现。
+首页脚本的 `data-preview="true"` 仅用于本项目演示路由，沿用内部演示的 `internal_tool` 问答通道。官网课程页使用课程 ID 配置和服务端灰度门禁；全站游客接口与游客历史恢复已实现，不能用内部预览绕过正式站点门禁。官网会员身份尚未实现。协议和迁移见[游客全站接入](../integration/游客全站接入.md)。
 
 先完成[本地启动](../getting-started/README.md)的依赖安装，在项目根目录使用虚拟环境执行：
 
@@ -45,6 +45,20 @@ FastAPI 托管 `frontend/dist`，每次修改源码后重新构建。Docker 镜�
 python scripts/smoke_kernel.py
 python -m pytest tests
 ```
+
+`pytest.ini` 将测试临时数据统一放在 `.pytest_cache/tmp`，pytest 每次运行会重建该目录；不要再为每轮验证创建根目录 `.pytest-tmp-*`。不要同时运行使用同一临时目录的多个测试进程。`.pytest_cache` 与 `.ruff_cache` 是可重新生成的缓存，测试结束后可清理；它们不属于项目源码。
+
+### PostgreSQL 集成检查
+
+CI 的 `postgres-integration` 独立使用 `pgvector/pgvector:pg16`。本地运行时，将 `TEST_POSTGRES_URL` 设置为专用测试库的 SQLAlchemy 连接 URL（`postgresql+psycopg://...`），再执行：
+
+```powershell
+python -m pytest -q tests/integration
+```
+
+未设置该变量时仅跳过集成测试，现有单元测试照常运行。设置后数据库不可用会失败，不静默跳过。测试拒绝 public 中已有表的数据库，在专用库逐例创建和清理随机 schema；账号需要创建 schema 和安装 vector 扩展的权限。向量和模型由受控数据提供，无需官网凭证或模型额度。此检查证明数据库行为，不代表官网联调、实际模型质量或生产恢复验收。
+
+依赖版本只在 `requirements-ci.txt` 维护一份；`requirements.txt` 引用它并增加本地模型依赖。修改引用关系时同步 Docker 的复制清单。
 
 首次咨询和多问题性能回归：`python -m pytest tests/test_response_latency.py`。
 用 `python scripts/benchmark_response_latency.py` 对比串行参考路径与最多三项并行的调度耗时；基准模拟每项 120 ms 上游等待，不连接数据库、官网或模型，不代表线上绝对耗时。真实请求按管理员 `/metrics` 的 `latency_ms` 和访问日志的 `duration_ms` 核验。

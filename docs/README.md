@@ -6,9 +6,14 @@
 
 - 首次运行：[本地启动](getting-started/README.md) → [接口操作示例](reference/api-examples.md)。
 - 运营验收：[L0 内部运营](operations/L0_OPERATIONS.md) → [官网试运行准出](operations/PILOT_LAUNCH.md) → [课程内容模板](templates/课程内容模板.md)。
+- 上线评审：[2026-10-09 完成情况与改进计划](operations/LAUNCH_REVIEW_2026-10-09.md)（含已确认月底目标、首发阻塞、工作窗口及下一步任务）。
 - 开发维护：[当前实现](architecture/current-system.md) → [开发指南](development/README.md)。
 - 产品评审：[需求分析报告](product/售前Agent助手_需求分析报告.html) → [PRD 骨架](product/售前Agent助手_PRD骨架.html) → [问诊与推荐规则设计](product/售前Agent助手_问诊与推荐规则设计.html)。
 - 官网对接：[全站接入实施计划](integration/官网全站接入实施计划.md) → [官网试运行准出](operations/PILOT_LAUNCH.md) → [接入方式调研](research/售前Agent助手_接入方式调研.html) → [对接确认清单](integration/售前Agent_对接确认清单.html)。
+- 官网登录用户对接：[负责人问题清单](integration/官网会员接入_负责人问题清单.md) → [身份与历史归属契约草案](integration/官网会员身份与历史归属契约.md)。
+- 官网接口资料：[源宝与课程助手 API](yuanbao-course-assistant-api.md) · [天树 CLI 与 AK/SK 接口](tstj-cli-guide.md)（官网源码整理，未逐项线上联调；不是本项目已实现能力）。
+- 公开项目选型：[2026-10-09 类似 GitHub 仓库调研](research/官网售前助手_公开仓库调研_2026-10-09.md)。
+- 当前改进执行：[调研后改进执行方案](integration/调研后改进执行方案.md)（限时验证、复用边界、单人排期与采用门槛）。
 - 了解精简范围：[售前代码边界](architecture/presales-scope.md)。
 - 理解复用背景：[P0 独立部署与 FDE 复用方案](architecture/售前Agent助手_P0独立部署与FDE复用方案.html)。
 

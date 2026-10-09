@@ -8,7 +8,16 @@
 2. 增加 `POSTGRES_PASSWORD`，将 `DATABASE_URL` 指向 Compose 内的 `postgres:5432/arborseek_p0`。数据库 URL 中的密码需要 URL 编码。不要沿用本机 `localhost` 数据库地址。
 3. 首次发布先保持 `PILOT_PERCENT=0`，不开放入口。准备本地 `data` 和 `docs`：课程原始资料不在仓库和镜像中，需通过受控渠道交付；本地运行资料整理/入库工具。挂载的资料需与代码版本一起备份。
 4. `docker compose --env-file .env.deploy config --quiet` 验证配置；`docker compose --env-file .env.deploy build` 构建镜像。
-5. 记录当前 Git 提交，将镜像标记为对应版本，例如 `ask-course:<commit>`，设置 `AGENT_IMAGE` 后执行 `docker compose --env-file .env.deploy up -d`。
+5. 记录当前 Git 提交，将镜像标记为对应版本，例如 `ask-course:<commit>`，设置 `AGENT_IMAGE`。先备份数据库及资料，在数据库副本验证迁移；正式升级时先停止旧 API，再启动数据库，使用新镜像运行一次迁移，最后启动 API：
+
+   ```powershell
+   docker compose --env-file .env.deploy stop api
+   docker compose --env-file .env.deploy up -d postgres
+   docker compose --env-file .env.deploy run --rm --no-deps api python -m alembic upgrade head
+   docker compose --env-file .env.deploy up -d --no-build api
+   ```
+
+   迁移前确认数据库已就绪。任一迁移步骤失败时停止发布，按备份与迁移恢复方案处理；不要继续启动新 API。
 6. 第一次启动可能下载模型，模型缓存持久化。确认 `/ready` 返回 200，再运行准出检查和真实课程评测。
 7. 官网同源代理 `/agent/` 到本服务，去掉前缀，关闭 SSE 缓冲，代理读取超时至少 180 秒。API 只绑定本机端口，由官网提供 HTTPS。测试移动端、登录和购买跳转。
 
@@ -16,7 +25,7 @@
 
 ## 数据库升级
 
-当前 `backend/db.py:init_db` 负责幂等升级（新增列、索引和词法回填），没有删除字段或表。升级前先备份，在数据库副本试跑新版本并核对文档、分片和向量数量，再升级应用。后续涉及删除或数据转换时，应提供独立迁移与恢复方案，不能只靠应用回退。
+数据库结构由 Alembic 版本化迁移管理。应用启动要求版本已到当前代码的 `head`，不代替发布前迁移。首次基线接管旧结构并保留业务数据。升级前先备份，在数据库副本运行 `python -m alembic upgrade head`，核对文档、分片、向量、会话及完整消息后再升级正式库。迁移由单一发布步骤执行，不让多个副本同时迁移。删除或数据转换须有独立恢复方案，不能只靠应用镜像回退。
 
 ## 备份与恢复演练
 

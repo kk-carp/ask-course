@@ -20,3 +20,27 @@ jobs:
       - run: npm test --prefix frontend
       - run: node --test tests/frontend_answer.test.cjs
       - run: python scripts/check_frontend.py
+  postgres-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: agent_integration
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: integration-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agent_integration"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_POSTGRES_URL: postgresql+psycopg://postgres:integration-only@127.0.0.1:5432/agent_integration
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements-ci.txt
+      - run: python -m pytest -q tests/integration
