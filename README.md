@@ -20,6 +20,7 @@
 - 游客自由问答与选课问诊共用 24 小时访客状态；官网公开的 26 门课程已列入审核清单，文字快照保存在 `data/official_course_drafts/`。其中 42、43、99 可展示为与目标相关的课程；完成运营审核前不开放购买入口和官网灰度组件。
 - 数据边界：`approved` = 可按适配条件推荐并生成购买入口；`recommendable` = 可展示方向相关课名与简介。42、43、99 的常见事实优先读取 `data/course_facts.json` 中提供资料的来源与更新时间，其他正文细节走数据库检索，官网快照仅作缺资料时的补充。资料冲突明确呈现，不推断观看期限。
 - 官网详情页注入：`<script defer src="/agent/widget.js" data-course-id="{id}"></script>`（白名单默认 42/43/99，`PILOT_PERCENT` 控制放量；跨页续聊靠访客 cookie）。
+- 官网暂时无法改动且尚未加载助手脚本时，可在助手服务的 `/consult` 独立页面验证游客咨询和历史；仍受课程审核与灰度门禁限制，暂不连接官网会员账号。使用范围见[游客接入](docs/integration/游客全站接入.md)。
 
 实现细节和已知限制见[当前实现](docs/architecture/current-system.md)。规划中的需求与验收目标不等于已上线能力。代码范围和迁移兼容说明见[售前代码边界](docs/architecture/presales-scope.md)。
 

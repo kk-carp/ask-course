@@ -30,6 +30,16 @@ def _demo_page() -> FileResponse:
 def register_frontend(app: FastAPI) -> None:
     """官网页面仅包含咨询入口；/admin 保留独立内部管理页。"""
     frontend_dir = APP_DIR.parent / "frontend"
+    @app.get("/consult", include_in_schema=False, response_model=None)
+    def standalone_consultation() -> FileResponse | JSONResponse:
+        page = frontend_dir / "dist" / "consult.html"
+        if not page.is_file() or not WIDGET_SCRIPT.is_file():
+            return JSONResponse(status_code=503, content={
+                "detail": "未找到独立咨询页构建产物。请在 frontend/ 执行 npm run build。",
+            })
+        return FileResponse(page, media_type="text/html; charset=utf-8",
+                            headers={"Cache-Control": "no-store"})
+
     if (frontend_dir / "vendor").is_dir():
         app.mount("/vendor", StaticFiles(directory=frontend_dir / "vendor"), name="frontend-vendor")
 

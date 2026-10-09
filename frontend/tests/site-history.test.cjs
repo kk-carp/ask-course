@@ -7,11 +7,11 @@ const {JSDOM} = require('jsdom');
 const tick = () => new Promise(resolve => setTimeout(resolve, 40));
 const root = path.resolve(__dirname, '..');
 
-test('fullsite guest history restores after refresh, renames, deletes and updates SPA context', async t => {
+test('standalone guest page uses real config and restores history after refresh, rename and delete', async t => {
   const records = new Map(), calls = [];
   const conversationId = '41c7c9b2-1acc-4e24-8543-c9e86267424a';
   async function mount(storedId) {
-    const dom = new JSDOM('<body></body>', {url:'https://site.test/projects', runScripts:'outside-only', pretendToBeVisual:true});
+    const dom = new JSDOM(fs.readFileSync(path.join(root, 'dist/consult.html'), 'utf8'), {url:'https://site.test/consult', runScripts:'outside-only', pretendToBeVisual:true});
     t.after(() => dom.window.close());
     const win = dom.window;
     win.matchMedia = () => ({matches:false, addListener(){}, removeListener(){}});
@@ -20,10 +20,11 @@ test('fullsite guest history restores after refresh, renames, deletes and update
     win.TextDecoder = TextDecoder;
     for (const file of ['vendor/answer-libs.js','answer-format.js']) win.eval(fs.readFileSync(path.join(root,file),'utf8'));
     if (storedId) win.localStorage.setItem('arborseek-consultation', storedId);
-    const script = win.document.createElement('script'); script.src = 'https://site.test/agent/widget.js'; script.dataset.mode = 'site';
+    const script = win.document.querySelector('script[src="./widget.js"]');
     Object.defineProperty(win.document,'currentScript',{value:script});
     win.fetch = async (url, options={}) => {
       const pathname = new URL(url).pathname, payload = options.body ? JSON.parse(options.body) : null;
+      assert.ok(!pathname.startsWith('/consult/'), 'API paths must resolve at the service root');
       calls.push({pathname, options, payload});
       const data = value => new Response(JSON.stringify(value));
       if (pathname.endsWith('/widget/config')) return data({enabled:true, history_enabled:true, history_hours:24});
@@ -52,6 +53,8 @@ test('fullsite guest history restores after refresh, renames, deletes and update
   const textarea = first.shadow.querySelector('textarea'); textarea.value = '帮我选课'; textarea.dispatchEvent(new first.win.Event('input'));
   first.shadow.querySelector('form').dispatchEvent(new first.win.Event('submit',{bubbles:true,cancelable:true})); await tick();
   assert.equal(calls.find(call => call.pathname.endsWith('/ask/stream')).payload.channel,'site_widget');
+  assert.ok(calls.some(call => call.pathname.endsWith('/widget/config')));
+  assert.ok(calls.every(call => !call.options.headers?.Authorization));
   assert.equal(calls.find(call => call.pathname.endsWith('/ask/stream')).payload.course_id,'43');
   assert.match(calls.find(call => call.pathname.endsWith('/ask/stream')).payload.request_id,/^[0-9a-f-]{36}$/);
   const storedId = first.win.localStorage.getItem('arborseek-consultation'); first.dom.window.close();
