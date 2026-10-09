@@ -14,9 +14,9 @@
 
 ## 文档状态与维护方式
 
-最新接入进度：Vue + Ant Design Vue 界面已推送；已实现全站游客入口、服务端历史和 Alembic 迁移，未公开发布。接入步骤见[游客全站接入](integration/游客全站接入.md)。后续会员身份和生产存储方案需确认。具体范围、接口和验收条件见[全站接入实施计划第 7 节](integration/官网全站接入实施计划.md#7-下一步改进方案与实施顺序)。
+当前能力、未完成事项与上线边界统一维护在[当前实现](architecture/current-system.md)。接入步骤见[游客全站接入](integration/游客全站接入.md)，待实施范围见[全站接入实施计划](integration/官网全站接入实施计划.md)。本导航不重复记录完成状态。
 
-`getting-started/`、`operations/`、`reference/`、`development/` 和 `architecture/current-system.md` 维护当前操作方法与实现说明。L0 手册中的准出条件属于验收目标，必须以实际评测和业务确认结果判断是否达成。
+`getting-started/`、`operations/`、`reference/` 和 `development/` 维护各自操作步骤；`architecture/current-system.md` 是当前实现与状态的唯一维护入口。`operations/P0_PROGRESS.md` 和日期命名的上线评审是历史快照，保留当时基线、测试结果与决策，不滚动追加当前进度。L0 手册中的准出条件属于验收目标，必须以实际评测和业务确认结果判断是否达成。
 
 `product/`、`research/`、`integration/` 及 FDE 复用方案包含规划、调研和协作材料，既有 HTML 保留供浏览器阅读。[全站接入实施计划](integration/官网全站接入实施计划.md) 维护最新接入范围和实施顺序。这些材料可能包含历史路径、待确认项或尚未实现的能力，不作为当前运行状态的证明。原复用方案提到的 `P0_REUSE.md` 未随项目提供，复用背景请阅读方案本身。
 

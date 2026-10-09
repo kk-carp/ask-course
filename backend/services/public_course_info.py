@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 
 from backend.services.course_catalog_service import OfficialCourse
+from backend.services.course_facts import fact_topic
 
 _DRAFTS = Path(__file__).resolve().parents[2] / "data" / "official_course_drafts"
 
@@ -18,19 +19,14 @@ ANSWER_PUBLIC_INSUFFICIENT = (
     "当前公开资料不足以回答这一点。你可以查看官网课程详情，或向课程顾问确认。"
 )
 
-_TOPIC_PATTERNS = (
-    ("hardware", r"硬件|设备|自备|真机"),
-    ("basis", r"什么基础|基础要求|零基础|入门门槛"),
-    ("overview", r"学什么|学哪些|课程内容|具体.*内容|讲什么|课程介绍|学习方式|怎么上课|如何上课|线上|录播"),
-)
-
 
 def public_fact_topic(question: str) -> str | None:
-    """识别是否在问官网可公开的事实类问题。"""
-    for name, pattern in _TOPIC_PATTERNS:
-        if re.search(pattern, question or ""):
-            return name
-    return None
+    """复用事实主题；快照仅补充概览、基础、硬件与公开授课方式。"""
+    topic = fact_topic(question)
+    if topic == "schedule":
+        # 开课日期不能用课程简介代答；这里只允许公开授课方式。
+        return "overview" if re.search(r"学习方式|怎么上课|如何上课|线上|录播", question) else None
+    return {"hardware": "hardware", "basis": "basis", "outline": "overview"}.get(topic)
 
 
 def answer_public_question(question: str, course: OfficialCourse) -> str | None:

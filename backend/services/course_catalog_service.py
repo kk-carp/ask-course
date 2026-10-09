@@ -114,8 +114,8 @@ def load_official_courses(*, force_refresh: bool = False) -> tuple[OfficialCours
                 if len(batch) < 100:
                     break
             courses = tuple({item.course_id: item for item in found}.values())
-    except Exception:
-        _log.warning("official course list lookup failed")
+    except (httpx.HTTPError, ValueError) as exc:
+        _log.warning("official course list lookup failed (%s)", type(exc).__name__)
         return _cache[1] if not force_refresh and _cache is not None and _cache[0] > now else ()
 
     _cache = (now + _CACHE_SECONDS, courses)

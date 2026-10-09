@@ -1,14 +1,12 @@
-"""只从访客原话提取选课画像；模型不决定课程、价格或购买入口。"""
+"""只从访客原话提取选课画像；规则不决定课程、价格或购买入口。"""
 
 from __future__ import annotations
 
-import json
 import re
 
-from backend.config import settings
 from backend.services.consultation_service import validate_answer
 
-_SPECIFIC_GOAL = re.compile(r"ROS|巡检|机械臂|抓取|导航|SLAM|大模型|智能体|编程|视觉|具身|保研|毕设|毕业设计|竞赛|项目", re.I)
+_SPECIFIC_GOAL = re.compile(r"ROS|巡检|机械臂|抓取|导航|SLAM|大模型|智能体|编程|视觉|具身|保研|毕设|毕业设计|竞赛|项目", re.IGNORECASE)
 _GOAL_STATEMENT = re.compile(r"(?:想学|想学习|想做|希望做|准备做|打算做|目标是|方向是)(.{0,100})")
 _HARDWARE = r"(?:硬件|机器人|机器狗|Go2|设备|机械臂)"
 _HOUR_NUMBERS = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
@@ -49,14 +47,14 @@ def _rules(text: str) -> dict:
     elif re.search(
         r"有一定基础|有点基础|(?<!没)(?<!没有)学过\s*(?:Python|ROS|C\+\+|编程)|"
         r"(?<!不)(?:会|懂)\s*(?:Python|ROS|C\+\+|编程)|有(?:编程|Python|ROS)基础",
-        text, re.I,
+        text, re.IGNORECASE,
     ):
         found["basis"] = "basic"
-    if re.search(r"不确定|不知道|不清楚|暂不清楚", text) and re.search(_HARDWARE, text, re.I):
+    if re.search(r"不确定|不知道|不清楚|暂不清楚", text) and re.search(_HARDWARE, text, re.IGNORECASE):
         found["hardware"] = "unknown"
-    elif re.search(rf"(?:没有|没|无).{{0,4}}{_HARDWARE}", text, re.I):
+    elif re.search(rf"(?:没有|没|无).{{0,4}}{_HARDWARE}", text, re.IGNORECASE):
         found["hardware"] = "no"
-    elif re.search(rf"(?:有|具备).{{0,8}}{_HARDWARE}", text, re.I):
+    elif re.search(rf"(?:有|具备).{{0,8}}{_HARDWARE}", text, re.IGNORECASE):
         found["hardware"] = "yes"
     hours = re.search(
         r"(?:每周|一周|每星期|一星期).{0,8}?(\d{1,2}|[一二两三四五六七八九十])"
@@ -74,32 +72,10 @@ def _rules(text: str) -> dict:
     return found
 
 
-def extract_profile_updates(text: str, current: dict, expected_field: str | None = None, *, use_model: bool = True) -> dict:
-    """模型仅做保守槽位提取；失败时按明确措辞提取，未知项继续追问。"""
+def extract_profile_updates(text: str, current: dict, expected_field: str | None = None) -> dict:
+    """按明确措辞提取槽位；未知项由本轮语义理解或后续追问处理。"""
     proposal = {**_contextual_reply(text, expected_field), **_rules(text)}
     goal_statement = _GOAL_STATEMENT.search(text)
-    if use_model and settings.chat_api_key and not proposal:
-        from backend.infra.generate import complete_chat
-
-        try:
-            result = complete_chat([
-                {
-                    "role": "system",
-                    "content": (
-                        "从访客本轮原话提取选课信息，仅输出 JSON 对象。允许键："
-                        "goal（具体技术/应用目标，不要只写就业、竞赛等宽泛目的）、"
-                        "basis（none/basic/experienced）、hardware（yes/no/unknown）、"
-                        "weekly_hours（1-80 的整数）、deadline（明确说出的项目完成期限）。只填明确说出的信息；不推断、不推荐课程。"
-                        f"上一问对应的字段：{expected_field or '无'}。短回答仅按该字段解释。"
-                    ),
-                },
-                {"role": "user", "content": text[:500]},
-            ])
-            parsed = json.loads(result.text)
-            if isinstance(parsed, dict):
-                proposal = {**parsed, **proposal}
-        except Exception:
-            pass
     updates: dict = {}
     for field in ("goal", "basis", "hardware", "weekly_hours", "deadline"):
         if field not in proposal:

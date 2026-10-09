@@ -5,7 +5,7 @@
 2. 付款且已确认课 → 详情/购买引导
 3. 有方向且能命中可推荐课 → 直接列课（不进问诊）
 4. 无方向 / 命中为空 / 就业类 → 游客问诊
-5. 已选课的公开事实 → official_course_drafts；不足则依据不足，本轮不 RAG
+5. 已选课的事实 → 实时商业字段 / 事实登记；公开概览补充官网快照
 6. 其余 → RAG；有 related_courses 不转人工
 """
 
@@ -34,12 +34,11 @@ from backend.services.approved_courses import (
 )
 from backend.services.consultation_service import (
     FIELDS,
-    QUESTIONS,
-    dialogue_history,
+    complete_dialogue,
+    dialogue_state,
     get_or_create_dialogue,
     load_owned,
     present,
-    remember_turn,
 )
 from backend.services.conversation_service import ConversationNotFoundError
 from backend.services.course_catalog_service import (
@@ -189,23 +188,9 @@ def _prepare_guest_dialogue(
                 )
             except ValueError as exc:
                 raise HTTPException(status_code=404, detail=str(exc)) from exc
-        history = dialogue_history(row)
-        profile = json.loads(row.profile_json)
-        from backend.services.course_scope import permits
-        if profile.get('_selected_course_id') and not permits(profile['_selected_course_id']):
-            profile.pop('_selected_course_id', None)
-        profile['_candidate_course_ids'] = [key for key in profile.get('_candidate_course_ids', []) if permits(key)]
-        pending = profile.get("_pending_field")
-        if not pending and history and history[-1][0] == "assistant":
-            pending = next(
-                (
-                    field
-                    for field, question in QUESTIONS.items()
-                    if history[-1][1].endswith(question)
-                ),
-                None,
-            )
-        updates = understanding.profile_updates.copy() if understanding else extract_profile_updates(payload.question, profile, pending, use_model=False)
+        profile, history = dialogue_state(row)
+        pending = profile["_pending_field"]
+        updates = understanding.profile_updates.copy() if understanding else extract_profile_updates(payload.question, profile, pending)
         if understanding and understanding.course_id:
             profile["_selected_course_id"] = understanding.course_id
         selection = should_enter_guest_consultation(
@@ -234,7 +219,7 @@ def _prepare_guest_dialogue(
             )
         else:
             # 课程事实 / 有方向列课等会离开问诊槽位，避免下一轮误吃短答。
-            profile.pop("_pending_field", None)
+            profile["_pending_field"] = None
             profile.update(updates)
         row.profile_json = json.dumps(profile, ensure_ascii=False)
         session.commit()
@@ -244,17 +229,6 @@ def _prepare_guest_dialogue(
             preview,
             profile.get("_selected_course_id") or payload.course_id,
         )
-
-
-def _remember_guest_dialogue(
-    visitor_id: str, dialogue_id: str, question: str, answer: str
-) -> None:
-    if db.SessionLocal is None:
-        return
-    with db.SessionLocal() as session:
-        row = load_owned(session, dialogue_id, visitor_id)
-        if row is not None and not row.widget_session:
-            remember_turn(session, row, question, answer)
 
 
 def _bind_selected_course(
@@ -445,13 +419,7 @@ def _iter_ask_turn(payload: AskRequest, identity: AskIdentity):
             row = load_owned(session, str(payload.conversation_id), identity.visitor_id)
             if row is None:
                 raise HTTPException(status_code=404, detail="会话不存在或已过期")
-            profile, history = json.loads(row.profile_json), dialogue_history(row)
-            if identity.course_ids is not None:
-                if profile.get('_selected_course_id') not in identity.course_ids:
-                    profile.pop('_selected_course_id', None)
-                profile['_candidate_course_ids'] = [key for key in profile.get('_candidate_course_ids', []) if key in identity.course_ids]
-            if not profile.get("_pending_field") and history and history[-1][0] == "assistant":
-                profile["_pending_field"] = next((field for field, question in QUESTIONS.items() if history[-1][1].endswith(question)), None)
+            profile, history = dialogue_state(row)
     t0 = time.perf_counter()
     catalog = () if is_simple_opening(payload.question) else load_recommendable_courses()
     record_latency("ask_catalog", (time.perf_counter() - t0) * 1000)
@@ -493,15 +461,14 @@ def _iter_ask_turn(payload: AskRequest, identity: AskIdentity):
         response.fallback_contact = settings.handoff_fallback_contact
     if identity.visitor_id and response.conversation_id:
         key = str(response.conversation_id)
-        _remember_guest_dialogue(identity.visitor_id, key, payload.question, response.answer)
         with db.SessionLocal() as session:
             row = load_owned(session, key, identity.visitor_id)
             if row:
-                saved = json.loads(row.profile_json)
-                if response.related_courses and response.intent in {"recommend", "compare"}:
-                    saved["_candidate_course_ids"] = [item.id for item in response.related_courses]
-                    row.profile_json = json.dumps(saved, ensure_ascii=False)
-                    session.commit()
+                saved = complete_dialogue(
+                    session, row, payload.question, response.answer,
+                    candidate_ids=[item.id for item in response.related_courses]
+                    if response.related_courses and response.intent in {"recommend", "compare"} else None,
+                )
                 if response.owner:
                     response.handoff_summary = build_handoff_summary(
                         profile=saved, course_id=saved.get("_selected_course_id") or payload.course_id,
@@ -524,7 +491,7 @@ def _run_questions(payload: AskRequest, identity: AskIdentity, understanding: Un
 def _iter_questions(payload: AskRequest, identity: AskIdentity, understanding: Understanding):
     questions = understanding.questions
     if len(questions) == 1:
-        yield "final", _run_single_question(payload.model_copy(update={"question": questions[0]}), identity, record_history=False, understanding=understanding)
+        yield "final", _run_single_question(payload.model_copy(update={"question": questions[0]}), identity, understanding=understanding)
         return
 
     responses: list[AskResponse] = []
@@ -560,7 +527,7 @@ def _iter_questions(payload: AskRequest, identity: AskIdentity, understanding: U
             "course_id": understanding.course_id if parallel else payload.course_id,
         })
         result = _run_single_question(
-            part, identity, record_history=False, context_question=payload.question,
+            part, identity, context_question=payload.question,
             understanding=understanding, guest_context=guest_context if parallel else None,
         )
         if not parallel:
@@ -625,7 +592,7 @@ def _collect_question_results(questions, execute, futures, responses, failures):
 
 
 def _run_single_question(
-    payload: AskRequest, identity: AskIdentity, *, record_history: bool = True,
+    payload: AskRequest, identity: AskIdentity, *,
     context_question: str | None = None,
     understanding: Understanding | None = None,
     guest_context: tuple | None = None,
@@ -653,10 +620,6 @@ def _run_single_question(
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         if preview is not None:
             result, related = _selection_response(preview)
-            if record_history:
-                _remember_guest_dialogue(
-                    visitor_id, dialogue_id, payload.question, result.answer
-                )
             bind_id = _course_id_to_bind(related=related)
             if bind_id:
                 _bind_selected_course(visitor_id, dialogue_id, bind_id)
@@ -682,10 +645,6 @@ def _run_single_question(
         result = routed.result
         related = list(routed.related_courses)
         if dialogue_id and visitor_id:
-            if record_history:
-                _remember_guest_dialogue(
-                    visitor_id, dialogue_id, payload.question, result.answer
-                )
             bind_id = _course_id_to_bind(
                 related=related, routed_course_id=routed.course_id
             )
@@ -729,8 +688,6 @@ def _run_single_question(
     fact = answer_course_fact(payload.question, course_id) if course_id else None
     if fact is not None:
         answer, evidence = fact
-        if dialogue_id and visitor_id and record_history:
-            _remember_guest_dialogue(visitor_id, dialogue_id, payload.question, answer)
         return AskResponse(
             answer=answer, hit=bool(evidence) and all(x["status"] not in {"unknown", "conflict"} for x in evidence),
             fact_sources=evidence, conversation_id=UUID(dialogue_id) if dialogue_id else None,
@@ -748,10 +705,6 @@ def _run_single_question(
         )
         card = [related_course_card(official)]
         if dialogue_id and visitor_id:
-            if record_history:
-                _remember_guest_dialogue(
-                    visitor_id, dialogue_id, payload.question, result.answer
-                )
             if guest_context is None:
                 _bind_selected_course(visitor_id, dialogue_id, official.course_id)
             result = replace(result, conversation_id=UUID(dialogue_id))
@@ -787,10 +740,6 @@ def _run_single_question(
         raise HTTPException(status_code=500, detail="问答处理失败") from exc
 
     if dialogue_id and visitor_id:
-        if record_history:
-            _remember_guest_dialogue(
-                visitor_id, dialogue_id, payload.question, result.answer
-            )
         if guest_context is None and course_id and len(related) <= 1:
             _bind_selected_course(visitor_id, dialogue_id, course_id)
         result = replace(result, conversation_id=UUID(dialogue_id))

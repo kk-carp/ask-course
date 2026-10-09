@@ -1,3 +1,8 @@
+import httpx
+import pytest
+
+from backend.config import settings
+from backend.services import course_catalog_service
 from backend.services.course_catalog_service import (
     OfficialCourse,
     parse_course_list,
@@ -53,3 +58,24 @@ def test_search_does_not_match_on_generic_course_word() -> None:
 
 def test_search_ignores_question_without_course_terms() -> None:
     assert search_related_courses("今天天气怎么样", courses=CATALOG) == []
+
+
+@pytest.mark.parametrize("error", [httpx.ReadTimeout("unavailable"), AssertionError("bug")])
+def test_catalog_only_degrades_expected_upstream_errors(monkeypatch, error, caplog):
+    monkeypatch.setattr(settings, "course_list_url", "https://example.test/courses")
+    monkeypatch.setattr(course_catalog_service, "_cache", None)
+
+    def fail(_request):
+        raise error
+
+    client_type = httpx.Client
+    monkeypatch.setattr(
+        course_catalog_service.httpx, "Client",
+        lambda **kwargs: client_type(transport=httpx.MockTransport(fail), **kwargs),
+    )
+    if isinstance(error, httpx.HTTPError):
+        assert course_catalog_service.load_official_courses() == ()
+        assert "ReadTimeout" in caplog.text
+    else:
+        with pytest.raises(AssertionError, match="bug"):
+            course_catalog_service.load_official_courses()

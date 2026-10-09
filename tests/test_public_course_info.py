@@ -23,6 +23,13 @@ def test_public_fact_topic_detects_overview_and_hardware() -> None:
     assert public_fact_topic("今天天气怎么样") is None
 
 
+def test_snapshot_topics_share_fact_priority_and_do_not_answer_dates() -> None:
+    assert public_fact_topic("价格包含硬件吗？") is None
+    assert public_fact_topic("课程什么时候开课？") is None
+    assert public_fact_topic("课程如何上课？") == "overview"
+    assert public_fact_topic("需要什么先修知识？") == "basis"
+
+
 def test_overview_without_draft_facts_returns_none(monkeypatch) -> None:
     empty = Path(__file__).resolve().parent / "_missing_official_drafts"
     monkeypatch.setattr("backend.services.public_course_info._DRAFTS", empty)

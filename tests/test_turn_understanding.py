@@ -1,6 +1,9 @@
 import json
 
+import pytest
+
 from backend.config import settings
+from backend.errors import UpstreamServiceError
 from backend.infra.generate import ChatResult, ChatUsage
 from backend.services import turn_understanding
 from backend.services.course_catalog_service import OfficialCourse
@@ -72,3 +75,18 @@ def test_plain_price_question_does_not_become_negotiation(monkeypatch):
     result = parse("这门课价格多少？", {"_selected_course_id": "99"})
     assert result.intent == "content" and result.questions == ["这门课价格多少？"]
     assert result.course_id == "99"
+
+
+@pytest.mark.parametrize("error", [UpstreamServiceError("unavailable"), AssertionError("bug")])
+def test_only_expected_semantic_failures_fall_back(monkeypatch, error):
+    monkeypatch.setattr(settings, "chat_api_key", "test")
+
+    def fail(*_args):
+        raise error
+
+    monkeypatch.setattr(turn_understanding, "complete_chat", fail)
+    if isinstance(error, UpstreamServiceError):
+        assert parse("想做机械臂项目").intent == "recommend"
+    else:
+        with pytest.raises(AssertionError, match="bug"):
+            parse("想做机械臂项目")

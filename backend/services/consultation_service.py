@@ -19,6 +19,7 @@ from backend.services.course_catalog_service import (
     expand_course_query,
     search_related_courses,
 )
+from backend.services.course_scope import permits
 from backend.services.handoff_service import resolve_handoff
 from backend.services.project_guidance import (
     is_project_goal,
@@ -92,16 +93,44 @@ def dialogue_history(row: VisitorConsultation) -> list[tuple[str, str]]:
     return [(item["role"], item["content"]) for item in json.loads(row.history_json or "[]")]
 
 
-def remember_turn(session: Session, row: VisitorConsultation, question: str, answer_text: str) -> None:
-    history = json.loads(row.history_json or "[]")
-    history.extend((
-        {"role": "user", "content": question},
-        {"role": "assistant", "content": answer_text},
-    ))
-    row.history_json = json.dumps(history[-6:], ensure_ascii=False)
-    row.updated_at = _now()
-    row.last_activity_at = _now()
+def dialogue_state(row: VisitorConsultation) -> tuple[dict, list[tuple[str, str]]]:
+    """读取可见课程与显式问诊状态；仅缺少状态键的旧会话兼容历史话术。"""
+    profile = json.loads(row.profile_json)
+    history = dialogue_history(row)
+    if profile.get("_selected_course_id") and not permits(profile["_selected_course_id"]):
+        profile.pop("_selected_course_id", None)
+    profile["_candidate_course_ids"] = [
+        key for key in profile.get("_candidate_course_ids", []) if permits(key)
+    ]
+    if "_pending_field" not in profile:
+        profile["_pending_field"] = next(
+            (field for field, question in QUESTIONS.items()
+             if history and history[-1][0] == "assistant" and history[-1][1].endswith(question)),
+            None,
+        )
+    return profile, history
+
+
+def complete_dialogue(
+    session: Session, row: VisitorConsultation, question: str, answer_text: str,
+    *, candidate_ids: list[str] | None = None,
+) -> dict:
+    """一次提交本轮候选与预览历史；站点完整回答由幂等认领流程保存。"""
+    profile, _ = dialogue_state(row)
+    if candidate_ids is not None:
+        profile["_candidate_course_ids"] = candidate_ids
+    row.profile_json = json.dumps(profile, ensure_ascii=False)
+    if not row.widget_session:
+        history = json.loads(row.history_json or "[]")
+        history.extend((
+            {"role": "user", "content": question},
+            {"role": "assistant", "content": answer_text},
+        ))
+        row.history_json = json.dumps(history[-6:], ensure_ascii=False)
+        row.updated_at = _now()
+        row.last_activity_at = _now()
     session.commit()
+    return profile
 
 
 def validate_answer(field: str, value: object) -> object:

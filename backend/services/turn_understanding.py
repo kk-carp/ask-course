@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from pydantic import BaseModel, Field
 
 from backend.config import settings
+from backend.errors import ServiceUnavailableError, UpstreamServiceError
 from backend.infra.generate import complete_chat
 from backend.services.consultation_service import validate_answer
 from backend.services.course_catalog_service import OfficialCourse
@@ -53,7 +54,7 @@ def understand_turn(question: str, *, page_course_id: str | None, profile: dict,
     fallback = Understanding(
         questions=split_questions(question)[:5], intent=classify_intent(question).value,
         course_id=selected,
-        profile_updates=extract_profile_updates(question, profile, profile.get("_pending_field"), use_model=False),
+        profile_updates=extract_profile_updates(question, profile, profile.get("_pending_field")),
     )
     project_selection = (fallback.intent == "recommend" and is_project_goal(question)
                          and not any(fact_topic(part) for part in fallback.questions))
@@ -61,7 +62,7 @@ def understand_turn(question: str, *, page_course_id: str | None, profile: dict,
         fallback.questions = [question]
     ordinal = re.search(r"第([一二三123])(?:门|个|款)", question)
     explicit = next((x.course_id for x in catalog if x.title in question or
-                     re.search(rf"(?:课程\s*(?:ID\s*)?{re.escape(x.course_id)})(?!\d)", question, re.I)), None)
+                     re.search(rf"(?:课程\s*(?:ID\s*)?{re.escape(x.course_id)})(?!\d)", question, re.IGNORECASE)), None)
     if explicit:
         fallback.course_id = explicit
     if ordinal:
@@ -133,6 +134,6 @@ def understand_turn(question: str, *, page_course_id: str | None, profile: dict,
             compare_ids=[x for x in parsed.compare_ids if x in allowed],
             llm_called=True, prompt_tokens=result.usage.prompt_tokens, completion_tokens=result.usage.completion_tokens,
         )
-    except Exception as exc:
+    except (ServiceUnavailableError, UpstreamServiceError, ValueError) as exc:
         _log.warning("turn understanding unavailable (%s); using explicit rules", type(exc).__name__)
         return fallback

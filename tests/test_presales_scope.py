@@ -1,5 +1,6 @@
 """售前精简回归：主链路、管理员迁移、课程空间隔离与无依据拒答。"""
 
+import json
 from io import BytesIO
 from uuid import uuid4
 
@@ -19,7 +20,14 @@ from backend.infra.generate import ChatResult, ChatUsage
 from backend.infra.retrieve import RetrievedChunk
 from backend.infra.storage import save_upload
 from backend.main import app
-from backend.models import Conversation, Message, Space, SpaceMember, User, VisitorConsultation
+from backend.models import (
+    Conversation,
+    Message,
+    Space,
+    SpaceMember,
+    User,
+    VisitorConsultation,
+)
 from backend.schemas import OwnerInfo
 from backend.seed.course_owners import P0_ADMIN_USERNAME, _seed_admin_user
 from backend.services import qa_service
@@ -45,33 +53,49 @@ def fail_model(*_args, **_kwargs):
     raise AssertionError("无课程依据时不得调用模型")
 
 
+def sse_events(response):
+    return [
+        (block.splitlines()[0].removeprefix("event: "),
+         json.loads(block.splitlines()[1].removeprefix("data: ")))
+        for block in response.text.strip().split("\n\n")
+    ]
+
+
+def ask_http(monkeypatch, stream, logged_in):
+    context = AuthContext(AuthUser("admin", "admin", "admin"), [settings.course_space_id]) if logged_in else None
+    monkeypatch.setattr("backend.routes.ask.load_auth_context", lambda _r: context)
+    monkeypatch.setattr("backend.routes.ask.allow_ask", lambda _id: True)
+    monkeypatch.setattr("backend.routes.ask._allow_guest_ask", lambda _id: True)
+    monkeypatch.setattr("backend.services.course_catalog_service.load_official_courses", lambda **_k: ())
+    monkeypatch.setattr(settings, "handoff_enabled", False)
+    return TestClient(app).post(
+        "/ask/stream" if stream else "/ask",
+        json={"question": "课时多久？", "course_id": "43", "channel": "internal_tool"},
+    )
+
+
+def ask_response(monkeypatch, stream, logged_in):
+    response = ask_http(monkeypatch, stream, logged_in)
+    assert response.status_code == 200
+    if not stream:
+        return response.json()
+    events = sse_events(response)
+    assert [name for name, _ in events] == ["progress", "meta", "final", "done"]
+    return next(data for name, data in events if name == "final")
+
+
 @pytest.mark.parametrize("stream", [False, True])
 @pytest.mark.parametrize("logged_in", [False, True])
 def test_knowledge_miss_never_generates(monkeypatch, sessions, stream, logged_in):
     monkeypatch.setattr(qa_service, "is_loaded", lambda: True)
     monkeypatch.setattr(qa_service, "_retrieve", lambda *_a, **_k: [])
     monkeypatch.setattr(qa_service, "generate_answer", fail_model)
-    monkeypatch.setattr(qa_service, "generate_answer_stream", fail_model)
     with sessions() as session:
         session.add(
             User(id="admin", username="admin", role="admin", password_hash="unused")
         )
         session.commit()
-    kwargs = {"user_id": "admin", "user_role": "admin"} if logged_in else {}
-    if stream:
-        events = list(
-            qa_service.iter_answer_events(
-                [settings.course_space_id], "课时多久？", **kwargs
-            )
-        )
-        assert [name for name, _ in events] == ["final"]
-        result = events[-1][1]
-    else:
-        result = qa_service._ask_result_payload(
-            qa_service.answer_question(
-                [settings.course_space_id], "课时多久？", **kwargs
-            )
-        )
+    result = ask_response(monkeypatch, stream, logged_in)
     assert result["hit"] is False
     assert result["llm_called"] is False
     assert result["sources"] == []
@@ -96,31 +120,12 @@ def test_course_answer_preserves_sources_and_history(
     monkeypatch.setattr(qa_service, "_retrieve", lambda *_a, **_k: [chunk])
     generated = ChatResult("课程周期为十二周。", ChatUsage(12, 8))
     monkeypatch.setattr(qa_service, "generate_answer", lambda *_a, **_k: generated)
-    monkeypatch.setattr(
-        qa_service,
-        "generate_answer_stream",
-        lambda *_a, **_k: iter([generated.text, generated]),
-    )
     with sessions() as session:
         session.add(
             User(id="admin", username="admin", role="admin", password_hash="unused")
         )
         session.commit()
-    kwargs = {"user_id": "admin", "user_role": "admin"} if logged_in else {}
-    if stream:
-        events = list(
-            qa_service.iter_answer_events(
-                [settings.course_space_id], "课时多久？", **kwargs
-            )
-        )
-        assert [name for name, _ in events] == ["meta", "delta", "final"]
-        result = events[-1][1]
-    else:
-        result = qa_service._ask_result_payload(
-            qa_service.answer_question(
-                [settings.course_space_id], "课时多久？", **kwargs
-            )
-        )
+    result = ask_response(monkeypatch, stream, logged_in)
     assert result["hit"] is True
     assert result["sources"][0]["document_id"] == str(chunk.document_id)
     assert result["answer"] == generated.text
@@ -131,13 +136,9 @@ def test_course_answer_preserves_sources_and_history(
             assert len(session.scalars(select(Message)).all()) == 2
 
 
-@pytest.mark.parametrize("stream", [False, True])
-def test_generation_requires_knowledge_even_with_history(stream):
-    fn = generate.generate_answer_stream if stream else generate.generate_answer
+def test_generation_requires_knowledge_even_with_history():
     with pytest.raises(ValueError, match="没有知识库依据"):
-        result = fn("有没有证书？", [], history=[("assistant", "保证拿证")])
-        if stream:
-            list(result)
+        generate.generate_answer("有没有证书？", [], history=[("assistant", "保证拿证")])
 
 
 def test_guest_history_only_guides_local_retrieval(monkeypatch):
@@ -263,7 +264,6 @@ def test_guest_api_miss_hands_off_to_selected_course(monkeypatch, sessions, stre
     monkeypatch.setattr(qa_service, "is_loaded", lambda: True)
     monkeypatch.setattr(qa_service, "_retrieve", lambda *_a, **_k: [])
     monkeypatch.setattr(qa_service, "generate_answer", fail_model)
-    monkeypatch.setattr(qa_service, "generate_answer_stream", fail_model)
 
     def handoff(*, question, course_id):
         assert course_id == "43"
@@ -309,23 +309,19 @@ def test_model_failure_does_not_save_answer(monkeypatch, sessions, stream):
         raise UpstreamServiceError("模型不可用")
 
     monkeypatch.setattr(qa_service, "generate_answer", fail)
-    monkeypatch.setattr(qa_service, "generate_answer_stream", fail)
     with sessions() as session:
         session.add(
             User(id="admin", username="admin", role="admin", password_hash="unused")
         )
         session.commit()
-    with pytest.raises(UpstreamServiceError):
-        if stream:
-            list(
-                qa_service.iter_answer_events(
-                    [settings.course_space_id], "课时多久？", user_id="admin"
-                )
-            )
-        else:
-            qa_service.answer_question(
-                [settings.course_space_id], "课时多久？", user_id="admin"
-            )
+    response = ask_http(monkeypatch, stream, logged_in=True)
+    if stream:
+        assert response.status_code == 200
+        errors = [data for name, data in sse_events(response) if name == "error"]
+        assert errors[0]["status"] == 502
+        assert not any(name == "final" for name, _ in sse_events(response))
+    else:
+        assert response.status_code == 502
     with sessions() as session:
         assert session.scalars(select(Message)).all() == []
         assert session.scalars(select(Conversation)).all() == []

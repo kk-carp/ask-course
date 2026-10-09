@@ -13,9 +13,9 @@ from backend.config import settings
 from backend.main import app
 from backend.models import VisitorConsultation
 from backend.schemas import OwnerInfo, SourceItem
-from backend.services.qa_service import AskResult
 from backend.services.consultation_service import QUESTIONS
 from backend.services.course_catalog_service import OfficialCourse
+from backend.services.qa_service import AskResult
 
 COURSES = (
     OfficialCourse("42", "高校大学生AI大模型企业实战训练营", "面向大学生的 AI 大模型实战训练营"),
@@ -140,6 +140,28 @@ def test_old_hardware_question_accepts_bare_no(sales_chat):
     assert result["owner"] is None
     with factory() as session:
         assert json.loads(session.get(VisitorConsultation, cid).profile_json)["hardware"] == "no"
+
+
+def test_cleared_pending_field_is_not_restored_from_old_wording(sales_chat, monkeypatch):
+    monkeypatch.setattr(
+        "backend.services.ask_orchestrator.answer_question",
+        lambda **_kwargs: AskResult(answer="请说明要了解的问题。", hit=True, sources=[]),
+    )
+    client, factory = sales_chat
+    first = send(client, "想学机械臂")
+    cid = first["conversation_id"]
+    with factory() as session:
+        row = session.get(VisitorConsultation, cid)
+        row.profile_json = json.dumps({"goal": "想学机械臂", "_pending_field": None})
+        row.history_json = json.dumps([
+            {"role": "assistant", "content": QUESTIONS["hardware"]},
+        ])
+        session.commit()
+    send(client, "没有", cid)
+    with factory() as session:
+        profile = json.loads(session.get(VisitorConsultation, cid).profile_json)
+        assert "hardware" not in profile
+        assert profile["_pending_field"] is None
 
 
 def test_official_price_failure_is_retryable_not_a_knowledge_miss(sales_chat, monkeypatch):
