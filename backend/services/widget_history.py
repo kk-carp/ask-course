@@ -2,6 +2,7 @@
 
 import json
 import re
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
@@ -178,7 +179,10 @@ def finish_turn(
 def abandon_turn(session, conversation_id, owner, request_id, claim_id=None):
     # Preserve completed answers; failed requests can safely retry with the same key.
     try:
-        row = owned(session, conversation_id, owner, lock=True)
+        # Internal cleanup can only remove this request's pending claim, never
+        # save an answer. Keep ownership/TTL checks even if upstream is now down.
+        cleanup_owner = replace(as_owner(owner), revalidate=None)
+        row = owned(session, conversation_id, cleanup_owner, lock=True)
     except HTTPException:
         session.rollback()
         return
@@ -234,6 +238,7 @@ def associate_current(session, identity, visitor_id, conversation_id=None):
     try:
         owner = customer_owner(session, identity)
         if conversation_id is None:
+            owner.check_current()
             session.commit()
             return owner, None
         if not visitor_id:
@@ -241,7 +246,7 @@ def associate_current(session, identity, visitor_id, conversation_id=None):
         row = session.scalar(select(VisitorConsultation).where(
             VisitorConsultation.id == conversation_id,
         ).with_for_update().execution_options(populate_existing=True))
-        owner.validate()
+        owner.check_current()
         if row is None:
             raise HTTPException(404, "会话不存在或已过期")
         if row.customer_id == owner.customer_id and row.source_visitor_id == visitor_id:

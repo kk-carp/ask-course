@@ -38,6 +38,8 @@ def load_owned(session, consultation_id, owner, *, lock=False):
     # PostgreSQL can wait on a concurrent transfer; recheck validity after waiting.
     owner.validate()
     if row is not None:
+        if lock:
+            owner.check_current()
         activity = row.last_activity_at or row.updated_at or row.created_at
         if activity.tzinfo is None:
             activity = activity.replace(tzinfo=timezone.utc)

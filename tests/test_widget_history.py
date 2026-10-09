@@ -260,6 +260,98 @@ def test_customer_verification_expiring_during_stream_cannot_save_final(store, m
         app.dependency_overrides.pop(verified_website_identity, None)
 
 
+def mock_me(monkeypatch):
+    import httpx
+    from backend.config import settings
+    from backend.infra import website_identity_client
+
+    state = {"status": 200, "calls": 0}
+
+    def upstream(request):
+        assert request.headers["token"] == request.headers["authorization"].split(" ", 1)[1]
+        assert not request.content and "cookie" not in request.headers
+        state["calls"] += 1
+        key = 101 if request.headers["token"] == "synthetic-A" else 102
+        return httpx.Response(state["status"], json={"success": True, "data": {"id": key, "role": "admin"}})
+
+    monkeypatch.setattr(website_identity_client, "Client", lambda **options: httpx.Client(
+        transport=httpx.MockTransport(upstream), **options,
+    ))
+    monkeypatch.setattr(settings, "website_identity_enabled", True)
+    return state
+
+
+def test_me_adapter_http_identity_association_and_upstream_failure_do_not_fall_back(store, monkeypatch):
+    state = mock_me(monkeypatch)
+    guest, device = TestClient(app), TestClient(app)
+    key = start(guest)
+    path = f"/widget/conversations/{key}"
+    auth_a, auth_b = {"Authorization": "Bearer synthetic-A"}, {"Authorization": "Bearer synthetic-B"}
+    assert guest.post(path + "/associate", headers=auth_a).status_code == 200
+    assert device.get(path + "/messages", headers=auth_a).status_code == 200
+    assert device.get(path + "/messages", headers=auth_b).status_code == 404
+    assert guest.get(path + "/messages").status_code == 404
+    with store() as session:
+        row = session.get(VisitorConsultation, key)
+        customer = session.get(WebsiteCustomer, row.customer_id)
+        assert customer.external_user_id == "101" and row.visitor_id is None
+    state["status"] = 401
+    for method, url, payload in [
+        ("GET", "/widget/config?mode=site", None), ("GET", "/widget/conversations", None),
+        ("GET", path + "/messages", None), ("PATCH", path, {"title": "revoked"}),
+        ("DELETE", path, None), ("POST", path + "/associate", None),
+        ("POST", "/ask", {"question": "你好", "channel": "site_widget", "conversation_id": key, "request_id": str(uuid4())}),
+    ]:
+        assert guest.request(method, url, headers=auth_a, json=payload).status_code == 401
+    state["status"] = 503
+    assert guest.get("/widget/conversations", headers=auth_a).status_code == 503
+    assert guest.get(path + "/messages").status_code == 404
+
+
+@pytest.mark.parametrize("upstream_status", [401, 503])
+def test_me_recheck_blocks_inflight_final_and_cleans_only_its_pending_claim(store, monkeypatch, upstream_status):
+    state = mock_me(monkeypatch)
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer synthetic-A"}
+    key = client.post("/widget/conversations", headers=headers, json={"request_id": str(uuid4())}).json()["id"]
+
+    def answer(payload, _identity):
+        state["status"] = upstream_status
+        yield "final", AskResponse(answer="must not persist", hit=True, conversation_id=payload.conversation_id)
+
+    monkeypatch.setattr("backend.routes.ask.iter_ask_turn", answer)
+    response = client.post("/ask/stream", headers=headers, json={
+        "question": "你好", "channel": "site_widget", "conversation_id": key, "request_id": str(uuid4()),
+    })
+    assert f'"status": {upstream_status}' in response.text
+    assert "event: final" not in response.text and "must not persist" not in response.text
+    with store() as session:
+        assert session.scalar(select(VisitorTurn)) is None
+        assert session.get(VisitorConsultation, key).history_json == "[]"
+    state["status"] = 200
+    assert client.get(f"/widget/conversations/{key}/messages", headers=headers).status_code == 200
+
+
+def test_me_recheck_blocks_late_partial_answer(store, monkeypatch):
+    state = mock_me(monkeypatch)
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer synthetic-A"}
+    key = client.post("/widget/conversations", headers=headers, json={"request_id": str(uuid4())}).json()["id"]
+
+    def questions(*_args):
+        state["status"] = 401
+        yield "part", {"index": 1, "question": "private", "answer": "must not output"}
+
+    monkeypatch.setattr("backend.services.ask_orchestrator._run_questions", questions)
+    response = client.post("/ask/stream", headers=headers, json={
+        "question": "你好", "channel": "site_widget", "conversation_id": key, "request_id": str(uuid4()),
+    })
+    assert '"status": 401' in response.text
+    assert "event: part" not in response.text and "must not output" not in response.text
+    with store() as session:
+        assert session.scalar(select(VisitorTurn)) is None
+
+
 def test_turn_idempotency_conflict_retry_and_expiration(store):
     with store() as session:
         key = history.create(session, "visitor-a", str(uuid4()))["id"]

@@ -1,7 +1,8 @@
 """Trusted website principals; external account IDs are never consultation keys."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from typing import Callable
 
 from fastapi import HTTPException
 
@@ -19,6 +20,7 @@ class VerifiedCustomerIdentity:
     provider: str
     external_user_id: str
     valid_until: datetime
+    revalidate: Callable[[], None] | None = field(default=None, repr=False, compare=False)
 
     def validate(self):
         if (not self.provider.strip() or len(self.provider) > 64
@@ -33,6 +35,7 @@ class WebsiteOwner:
     visitor_id: str | None = None
     customer_id: str | None = None
     valid_until: datetime | None = None
+    revalidate: Callable[[], None] | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self):
         if bool(self.visitor_id) == bool(self.customer_id):
@@ -45,6 +48,13 @@ class WebsiteOwner:
             self.valid_until.tzinfo is None or self.valid_until <= utcnow()
         ):
             raise HTTPException(401, "官网身份已失效，请重新登录")
+
+    def check_current(self):
+        """Recheck the original request's credential at a sensitive boundary."""
+        self.validate()
+        if self.revalidate is not None:
+            self.revalidate()
+        self.validate()
 
     @property
     def key(self):

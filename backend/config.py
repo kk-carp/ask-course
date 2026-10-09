@@ -9,7 +9,7 @@ P0 改动（相对 FDE 源）：
 
 from urllib.parse import urlparse
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_SECRET_KEY = "change-me-for-local-dev"
@@ -120,6 +120,20 @@ class Settings(BaseSettings):
     visitor_consultation_hours: int = 24
     # Website customers use a separate retention policy from anonymous visitors.
     customer_consultation_days: int = 90
+
+    # Opt-in only after website logout/revocation passes real verification.
+    website_identity_enabled: bool = False
+    website_identity_provider: str = "arborseek-production"
+    website_identity_timeout_seconds: float = Field(default=3.0, gt=0, le=10)
+    # Local request deadline, not the upstream token's expiry or a login session.
+    website_identity_max_request_seconds: int = Field(default=300, gt=0, le=900)
+
+    @field_validator("website_identity_provider")
+    @classmethod
+    def _website_provider(cls, value: str) -> str:
+        if not value.strip() or value != value.strip() or len(value) > 64:
+            raise ValueError("WEBSITE_IDENTITY_PROVIDER 必须是非空且至多 64 字符的稳定命名空间")
+        return value
 
     @field_validator("customer_consultation_days")
     @classmethod

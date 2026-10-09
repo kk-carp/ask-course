@@ -2,6 +2,7 @@
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from dataclasses import replace
 from threading import Barrier, Event
 from uuid import uuid4
 import time
@@ -19,6 +20,55 @@ from backend.services.consultation_service import complete_dialogue
 
 def identity(key="101"):
     return VerifiedCustomerIdentity("website-prod", key, history.now() + timedelta(hours=1))
+
+
+def test_upstream_rejection_while_waiting_for_row_lock_denies_write(postgres_store):
+    factory, engine, _ = postgres_store
+    with factory() as session:
+        key = history.create(session, "visitor-a", str(uuid4()))["id"]
+        owner, _ = history.associate_current(session, identity(), "visitor-a", key)
+    revoked, started = Event(), Event()
+    worker_pid = []
+
+    def check_upstream():
+        if revoked.is_set():
+            raise HTTPException(401, "synthetic upstream rejection")
+
+    checked_owner = replace(owner, revalidate=check_upstream)
+
+    def write():
+        with factory() as session:
+            worker_pid.append(session.scalar(text("SELECT pg_backend_pid()")))
+            started.set()
+            try:
+                history.rename(session, key, checked_owner, "must not persist")
+            except HTTPException as exc:
+                return exc.status_code
+            return 200
+
+    with factory() as session, ThreadPoolExecutor(max_workers=1) as pool:
+        history.owned(session, key, owner, lock=True)
+        future = pool.submit(write)
+        try:
+            assert started.wait(timeout=5)
+            deadline = time.monotonic() + 5
+            blocked = False
+            while time.monotonic() < deadline:
+                with engine.connect() as observer:
+                    blocked = bool(observer.scalar(text(
+                        "SELECT cardinality(pg_blocking_pids(:pid)) > 0"
+                    ), {"pid": worker_pid[0]}))
+                if blocked:
+                    break
+                time.sleep(0.01)
+            assert blocked, "Write did not wait for the authorization row lock"
+            revoked.set()
+        finally:
+            session.rollback()
+        assert future.result(timeout=10) == 401
+    with factory() as session:
+        row = history.owned(session, key, owner)
+        assert row.title != "must not persist" and row.deleted_at is None
 
 
 @pytest.mark.parametrize("same_account", [True, False])

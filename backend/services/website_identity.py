@@ -1,25 +1,54 @@
 """Fail-closed verification seam and transactional website customer creation."""
 
 from uuid import uuid4
+from datetime import timedelta
+import re
 
 from fastapi import HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as postgres_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
-from backend.domain.website_owner import VerifiedCustomerIdentity, WebsiteOwner
+from backend.config import settings
+from backend.domain.website_owner import VerifiedCustomerIdentity, WebsiteOwner, utcnow
+from backend.infra.website_identity_client import lookup_member
 from backend.models import WebsiteCustomer
 
 
 def verified_website_identity(request: Request) -> VerifiedCustomerIdentity | None:
-    """Replace with the real server verifier once its contract is available.
+    """Opt-in Bearer verifier. Only the upstream response establishes an ID.
 
-    No request header, staff cookie or client-declared ID can produce a customer.
-    A supplied credential must never silently fall back to a guest.
+    The switch stays off until website transport/revocation are confirmed. An
+    absent credential is a guest; an invalid/unverifiable one never falls back.
     """
-    if request.headers.get("authorization") is not None:
+    authorization = request.headers.get("authorization")
+    token = request.headers.get("token")
+    if authorization is None and token is None:
+        return None
+    if not settings.website_identity_enabled:
         raise HTTPException(503, "官网身份验证尚未接通，请稍后重试")
-    return None
+    if (authorization is None or len(request.headers.getlist("authorization")) != 1
+            or len(authorization) > 8192
+            or not re.fullmatch(r"(?i:Bearer) [A-Za-z0-9._~+/-]+=*", authorization)):
+        raise HTTPException(401, "官网凭证格式无效，请重新登录")
+    if token is not None and (len(request.headers.getlist("token")) != 1
+                              or token != authorization.split(" ", 1)[1]):
+        raise HTTPException(401, "官网凭证不一致，请重新登录")
+    member_id = lookup_member(authorization)
+
+    def revalidate():
+        if not settings.website_identity_enabled:
+            raise HTTPException(503, "官网身份验证暂不可用，请稍后重试")
+        if lookup_member(authorization) != member_id:
+            raise HTTPException(401, "官网身份已变化，请重新登录")
+
+    # /me has no documented expiry field. Bound this request locally and verify
+    # remotely on later requests/writes/outputs; never decode an unsigned JWT.
+    return VerifiedCustomerIdentity(
+        settings.website_identity_provider, member_id,
+        utcnow() + timedelta(seconds=settings.website_identity_max_request_seconds),
+        revalidate=revalidate,
+    )
 
 
 def customer_owner(session, identity: VerifiedCustomerIdentity) -> WebsiteOwner:
@@ -35,7 +64,8 @@ def customer_owner(session, identity: VerifiedCustomerIdentity) -> WebsiteOwner:
             id=str(uuid4()), provider=identity.provider, external_user_id=identity.external_user_id,
         ).on_conflict_do_nothing(index_elements=["provider", "external_user_id"]))
         row = session.scalar(query)
-    owner = WebsiteOwner(customer_id=row.id, valid_until=identity.valid_until)
+    owner = WebsiteOwner(customer_id=row.id, valid_until=identity.valid_until,
+                         revalidate=identity.revalidate)
     owner.validate()
     return owner
 

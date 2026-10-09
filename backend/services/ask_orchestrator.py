@@ -408,7 +408,7 @@ def iter_ask_turn(payload: AskRequest, identity: AskIdentity):
             finally:
                 course_scope.reset(token)
             if identity.consultation_owner:
-                identity.consultation_owner.validate()
+                identity.consultation_owner.check_current()
             yield item
     finally:
         inner.close()
