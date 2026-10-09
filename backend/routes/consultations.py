@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 from typing import Annotated
+from hashlib import sha256
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
@@ -88,6 +89,9 @@ def widget_config(
         "course_id": course_id if course else None,
         "history_enabled": enabled and mode == 'site',
         "history_hours": int(owner.retention.total_seconds() // 3600),
+        # Display/cache partition only; never accepted as an authorization input.
+        "identity_kind": "customer" if owner.customer_id else "guest",
+        "identity_key": sha256(owner.key.encode()).hexdigest(),
         "course_title": course.title if course else None,
         "default_prompts": [
             "推荐一门适合我的课程",

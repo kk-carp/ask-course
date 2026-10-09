@@ -8,7 +8,20 @@ import { StyleProvider } from 'ant-design-vue/es/_util/cssinjs';
 const ATextarea = AInput.TextArea;
 const menuItems = [{key: 'rename', label: '重命名', icon: () => h(UiIcon, {name: 'edit'})}, {key: 'delete', label: '删除', danger: true, icon: () => h(UiIcon, {name: 'delete'})}];
 
-const props = defineProps(['api', 'config', 'preview', 'courseId', 'pageContext', 'siteMode', 'format', 'styleContainer', 'popupContainer']);
+const props = defineProps(['api', 'config', 'preview', 'courseId', 'pageContext', 'siteMode', 'format', 'styleContainer', 'popupContainer', 'identityRefresh', 'onIdentityInvalid']);
+let live = true;
+const requests = new AbortController();
+const current = () => live && !requests.signal.aborted;
+async function requestJson(path, method = 'GET', payload) {
+  const data = await json(props.api, path, method, payload, {signal:requests.signal});
+  if (!current()) throw new DOMException('身份已变化', 'AbortError');
+  return data;
+}
+function failure(cause) {
+  if (!current()) return false;
+  if (cause.status === 401) { props.onIdentityInvalid?.(); return false; }
+  return cause.name !== 'AbortError';
+}
 const durable = !!props.config.history_enabled;
 const pageCourse = computed(() => props.pageContext ? props.pageContext.courseId : props.courseId);
 const pageTitle = computed(() => pageCourse.value === props.config.course_id ? props.config.course_title : null);
@@ -21,23 +34,25 @@ const searchOpen = ref(false), search = ref(''), editingSession = ref(null), nam
 const filteredSessions = computed(() => sessions.value.filter(session => session.title.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase())));
 const renameValid = computed(() => !!nameDraft.value.trim() && [...nameDraft.value.trim()].length <= 40);
 let sessionSequence = 1, activeSession = 1;
-const key = props.preview ? 'arborseek-preview-consultation' : 'arborseek-consultation';
+const baseKey = props.preview ? 'arborseek-preview-consultation' : 'arborseek-consultation';
+const key = props.config.identity_key ? `${baseKey}:${props.config.identity_key}` : baseKey;
 let conversationId, creationRequestId;
 try { conversationId = localStorage.getItem(key) || undefined; } catch { /* 无持久存储仍可咨询 */ }
 const prompts = props.config.default_prompts?.length ? props.config.default_prompts : ['推荐一门适合我的课程', '按我的基础帮我选课', '我想找课程顾问'];
-const event = name => props.preview ? Promise.resolve() : json(props.api, 'widget/events', 'POST', {course_id: pageCourse.value, mode: props.siteMode ? 'site' : 'course', event_name: name}).catch(() => {});
+const event = name => props.preview || !current() ? Promise.resolve() : requestJson('widget/events', 'POST', {course_id: pageCourse.value, mode: props.siteMode ? 'site' : 'course', event_name: name}).catch(cause => { failure(cause); });
 const newId = () => crypto.randomUUID();
 function rememberId() {
+  if (!current()) return;
   try { if (conversationId) localStorage.setItem(key, conversationId); else localStorage.removeItem(key); } catch { /* ignore */ }
 }
 async function refreshHistory(offset = 0) {
   historyLoading.value = true; historyError.value = '';
   try {
-    const data = await json(props.api, `widget/conversations?offset=${offset}`);
+    const data = await requestJson(`widget/conversations?offset=${offset}`);
     sessions.value = offset ? [...sessions.value, ...data.items] : data.items;
     nextHistoryOffset.value = data.next_offset;
-  } catch (cause) { historyError.value = cause.message; }
-  finally { historyLoading.value = false; }
+  } catch (cause) { if (failure(cause)) historyError.value = cause.message; }
+  finally { if (current()) historyLoading.value = false; }
 }
 let previousOverflow = null;
 function syncScroll() {
@@ -47,14 +62,26 @@ function syncScroll() {
 }
 watch(open, async value => {
   syncScroll(); await nextTick();
+  if (!current()) return;
   if (value) { event('widget_open'); input.value?.focus({preventScroll: true}); }
   else launcher.value?.focus({preventScroll: true});
 });
 onMounted(async () => {
   window.addEventListener('resize', syncScroll); event('widget_impression');
   if (durable && conversationId) await restoreSession({id: conversationId});
+  if (durable && props.identityRefresh && current()) await refreshHistory();
 });
-onBeforeUnmount(() => { window.removeEventListener('resize', syncScroll); if (previousOverflow !== null) document.body.style.overflow = previousOverflow; });
+function clearIdentityState() {
+  live = false; requests.abort();
+  try { localStorage.removeItem(key); localStorage.removeItem(baseKey); } catch { /* ignore */ }
+  conversationId = undefined; creationRequestId = undefined; activeSession = ++sessionSequence;
+  turns.value = []; sessions.value = []; draft.value = ''; busy.value = false;
+  historyOpen.value = false; searchOpen.value = false; search.value = '';
+  editingSession.value = null; nameDraft.value = ''; historyError.value = '';
+  historyLoading.value = false; nextHistoryOffset.value = null;
+}
+defineExpose({clearIdentityState});
+onBeforeUnmount(() => { live = false; requests.abort(); window.removeEventListener('resize', syncScroll); if (previousOverflow !== null) document.body.style.overflow = previousOverflow; });
 async function scrollAnswer() { await nextTick(); if (log.value) log.value.scrollTop = log.value.scrollHeight; }
 function resizeInput() { /* Ant Design Vue 的 autoSize 负责输入框高度。 */ }
 function keydown(e) {
@@ -78,8 +105,8 @@ async function sessionAction(key, session) {
   if (key === 'rename') { historyError.value = ''; editingSession.value = session.id; nameDraft.value = session.title; }
   if (key === 'delete') {
     if (durable) {
-      try { await json(props.api, `widget/conversations/${session.id}`, 'DELETE'); }
-      catch (cause) { historyError.value = cause.message; return; }
+      try { await requestJson(`widget/conversations/${session.id}`, 'DELETE'); }
+      catch (cause) { if (failure(cause)) historyError.value = cause.message; return; }
     }
     sessions.value = sessions.value.filter(item => item.id !== session.id);
     if (session.id === activeSession) reset(false);
@@ -89,8 +116,8 @@ async function renameSession() {
   if (!renameValid.value) return;
   const session = sessions.value.find(item => item.id === editingSession.value);
   if (durable && session) {
-    try { await json(props.api, `widget/conversations/${session.id}`, 'PATCH', {title: nameDraft.value.trim()}); }
-    catch (cause) { historyError.value = cause.message; return; }
+    try { await requestJson(`widget/conversations/${session.id}`, 'PATCH', {title: nameDraft.value.trim()}); }
+    catch (cause) { if (failure(cause)) historyError.value = cause.message; return; }
   }
   if (session) { session.customTitle = nameDraft.value.trim(); session.title = session.customTitle; }
   editingSession.value = null; historyOpen.value = true;
@@ -102,16 +129,17 @@ async function restoreSession(session) {
     try {
       let offset = 0, records = [];
       do {
-        const data = await json(props.api, `widget/conversations/${session.id}/messages?offset=${offset}`);
+        const data = await requestJson(`widget/conversations/${session.id}/messages?offset=${offset}`);
         records.push(...data.items); offset = data.next_offset;
       } while (offset !== null && offset !== undefined);
       turns.value = records.map(item => ({question: item.question, result: item.result, answer: item.result.answer, requestId: item.request_id, parts: [], thinking: false}));
       activeSession = session.id; conversationId = session.id; draft.value = ''; historyOpen.value = false; rememberId();
       await scrollAnswer();
     } catch (cause) {
+      if (!failure(cause)) return;
       historyError.value = cause.message;
       if (cause.status === 404) { conversationId = undefined; rememberId(); }
-    } finally { busy.value = false; }
+    } finally { if (current()) busy.value = false; }
     return;
   }
   saveCurrent();
@@ -130,7 +158,7 @@ function reset(archive = true) {
 }
 async function ask(preset, retryTurn) {
   const question = (typeof preset === 'string' ? preset : draft.value).trim();
-  if (!question || busy.value) return;
+  if (!question || busy.value || !current()) return;
   busy.value = true; draft.value = ''; nextTick(resizeInput);
   let turn;
   if (retryTurn) {
@@ -144,22 +172,24 @@ async function ask(preset, retryTurn) {
   try {
     if (durable && !conversationId) {
       creationRequestId ||= newId();
-      const session = await json(props.api, 'widget/conversations', 'POST', {request_id: creationRequestId});
+      const session = await requestJson('widget/conversations', 'POST', {request_id: creationRequestId});
       conversationId = session.id; activeSession = session.id; rememberId();
     }
     if (durable && !turn.requestId) turn.requestId = newId();
     const result = await streamAsk(props.api, {question, course_id: pageCourse.value, channel: props.preview ? 'internal_tool' : props.siteMode ? 'site_widget' : 'course_page', conversation_id: conversationId, request_id: turn.requestId}, part => {
+      if (!current()) return;
       turn.parts[part.index - 1] = `${part.index}. ${part.question}\n${part.answer}`;
       turn.answer = turn.parts.filter(Boolean).join('\n\n'); turn.thinking = false; scrollAnswer();
-    });
+    }, {signal:requests.signal});
+    if (!current()) return;
     turn.result = result; turn.answer = result.answer || ''; turn.thinking = false;
     conversationId = result.conversation_id || conversationId;
     try { if (conversationId) localStorage.setItem(key, conversationId); } catch { /* ignore */ }
     if (['upstream_error', 'service_unavailable'].includes(result.error_type)) { turn.error = '服务暂时不可用，可重试本次提问。'; event('error'); }
     if (result.related_courses?.length) event('recommendation');
     if (showOwner(turn)) event('handoff');
-  } catch (cause) { turn.error = cause.message || '暂时无法连接，请稍后重试。'; event('error'); }
-  finally { busy.value = false; turn.thinking = false; await scrollAnswer(); if (open.value) input.value?.focus({preventScroll: true}); }
+  } catch (cause) { if (failure(cause)) { turn.error = cause.message || '暂时无法连接，请稍后重试。'; event('error'); } }
+  finally { if (current()) { busy.value = false; turn.thinking = false; await scrollAnswer(); if (current() && open.value) input.value?.focus({preventScroll: true}); } }
 }
 function showOwner(turn) {
   const result = turn.result;
@@ -170,11 +200,11 @@ function ownerContact(turn) { return httpsUrl(turn.result.owner?.configured ? tu
 const imageUrl = value => { try { return /\.(png|jpe?g|webp|gif|svg)$/i.test(new URL(value).pathname); } catch { return false; } };
 async function purchase(item, turn) {
   try {
-    const result = await json(props.api, `purchase/${encodeURIComponent(item.id)}`, 'POST');
+    const result = await requestJson(`purchase/${encodeURIComponent(item.id)}`, 'POST');
     const url = httpsUrl(result.url);
     if (!url || new URL(url).hostname !== 'www.arborseek.com') throw new Error('购买地址无效');
     location.assign(url);
-  } catch (cause) { turn.actionError = cause.message; }
+  } catch (cause) { if (failure(cause)) turn.actionError = cause.message; }
 }
 async function copySummary(turn) {
   try { await navigator.clipboard.writeText(turn.result.handoff_summary); turn.copyStatus = '已复制'; }
@@ -207,7 +237,7 @@ async function copySummary(turn) {
             <p v-if="historyLoading" class="as-history-note">正在加载…</p>
             <p v-if="historyError" class="as-error" role="alert">{{ historyError }}</p>
             <AButton v-if="durable && nextHistoryOffset !== null" :disabled="historyLoading" @click="refreshHistory(nextHistoryOffset)">加载更多</AButton>
-            <p class="as-history-note">{{ durable ? `本浏览器游客对话保留 ${config.history_hours || 24} 小时，按消息活动时间计算。` : '仅保留本次页面访问的对话，刷新后清空。' }}</p>
+            <p class="as-history-note">{{ durable ? `${config.identity_kind === 'customer' ? '本人对话' : '本浏览器游客对话'}保留 ${config.history_hours || 24} 小时，按消息活动时间计算。` : '仅保留本次页面访问的对话，刷新后清空。' }}</p>
           </div>
         </template>
       </APopover>

@@ -100,7 +100,8 @@ test('busy state prevents concurrent requests and retry replaces the failed turn
 });
 test('website pilot gate remains effective and production uses course_page', async t => {
   const disabled = await fixture({preview:false,enabled:false}); t.after(() => disabled.dom.window.close());
-  assert.equal(disabled.shadow, undefined);
+  assert.equal(disabled.shadow.querySelector('.as-launch'), null);
+  assert.equal(disabled.win.document.querySelector('#arborseek-presales-agent').hidden, true);
   const mismatch = await fixture({preview:false,url:'https://site.test/course/99'}); t.after(() => mismatch.dom.window.close());
   assert.equal(mismatch.shadow, undefined); assert.equal(mismatch.calls.length, 0);
   const f = await fixture({preview:false}); t.after(() => f.dom.window.close());

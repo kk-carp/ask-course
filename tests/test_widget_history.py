@@ -65,6 +65,32 @@ def start(client, request_id=None):
     return response.json()["id"]
 
 
+def test_config_identity_partition_is_server_owned_stable_and_not_authorization(store):
+    guest, other = TestClient(app), TestClient(app)
+    path = "/widget/config?mode=site"
+    first = guest.get(path)
+    assert first.headers["cache-control"] == "no-store"
+    guest_key = first.json()["identity_key"]
+    assert first.json()["identity_kind"] == "guest"
+    assert guest.get(path).json()["identity_key"] == guest_key
+    assert other.get(path).json()["identity_key"] != guest_key
+    identity = VerifiedCustomerIdentity("website-prod", "101", history.now() + timedelta(hours=1))
+    app.dependency_overrides[verified_website_identity] = lambda: identity
+    try:
+        customer = guest.get(path).json()
+        assert customer["identity_kind"] == "customer"
+        assert len(customer["identity_key"]) == 64
+        assert customer["identity_key"] != guest_key
+        assert other.get(path).json()["identity_key"] == customer["identity_key"]
+        assert not {"external_user_id", "customer_id", "token", "valid_until"} & customer.keys()
+        app.dependency_overrides[verified_website_identity] = lambda: None
+        assert guest.get(path).json()["identity_key"] == guest_key
+        # Even the genuine partition reference supplied by a browser grants no access.
+        assert other.get(path + "&identity_key=" + customer["identity_key"]).json()["identity_kind"] == "guest"
+    finally:
+        app.dependency_overrides.pop(verified_website_identity, None)
+
+
 def test_history_ownership_rename_ttl_delete_and_late_result(store):
     client, other = TestClient(app), TestClient(app)
     creation_key = str(uuid4())
