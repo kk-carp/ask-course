@@ -29,3 +29,11 @@ data/operations/
 frontend/node_modules/
 frontend/dist/
 data/eval/load-results*.json
+
+# 个人训练、竞品研究及外部系统原始说明保存在仓库外，防止复制回来后误提交。
+/docs/development/training/
+/docs/development/初级开发者30天项目训练计划.md
+/docs/development/项目训练教练使用指南.md
+/docs/research/
+/docs/reference/official/
+/docs/local/

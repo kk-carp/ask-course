@@ -8,7 +8,7 @@
 - [L0 内部运营](docs/operations/L0_OPERATIONS.md)：准备课程正文与真实售前映射，执行资料门禁和金标评测。
 - [官网试运行准出](docs/operations/PILOT_LAUNCH.md)：运营审核清单、嵌入代码、灰度开关、验收与回滚。
 - [开发指南](docs/development/README.md)：代码分层、常用检查和维护入口。
-- [全部文档](docs/README.md)：产品规划、技术方案、调研、对接清单和模板。
+- [全部文档](docs/README.md)：产品需求、实现说明、接口、部署验收和资料模板。
 
 ## 当前能力与边界
 
