@@ -3,11 +3,12 @@
 import time
 from dataclasses import dataclass
 
-from openai import APIConnectionError, APIStatusError, OpenAI
+from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 
 from backend.config import settings
 from backend.errors import UpstreamServiceError
 from backend.infra.metrics import record_latency
+from backend.infra.operations_metrics import record_model
 from backend.infra.retrieve import RetrievedChunk
 
 ChatMessages = list[dict[str, object]]
@@ -67,6 +68,7 @@ def _create_chat_completion(
     try:
         return client.chat.completions.create(**payload)
     except (APIConnectionError, APIStatusError, TimeoutError) as exc:
+        record_model(failed=True, timed_out=isinstance(exc, (APITimeoutError, TimeoutError)), usage_known=False)
         raise UpstreamServiceError("上游模型调用失败") from exc
 
 
@@ -74,9 +76,12 @@ def complete_chat(messages: ChatMessages, *, temperature: float = 0.1) -> ChatRe
     """调用 DeepSeek 完成一轮对话；失败统一为上游错误，不当成知识库未命中。"""
     started = time.perf_counter()
     response = _create_chat_completion(messages, temperature=temperature)
+    usage = _usage_from_response(response)
     record_latency("model", (time.perf_counter() - started) * 1000)
     message = response.choices[0].message.content if response.choices else None
     answer = (message or "").strip()
+    record_model(prompt_tokens=usage.prompt_tokens, completion_tokens=usage.completion_tokens,
+                 failed=not bool(answer), usage_known=getattr(response, "usage", None) is not None)
     if not answer:
         raise UpstreamServiceError("上游模型返回空响应")
     return ChatResult(text=answer, usage=_usage_from_response(response))

@@ -116,9 +116,9 @@ def main() -> int:
                     continue
             response.raise_for_status()
             document = response.json()
-            if document["status"] != "ready":
+            if document["status"] != "pending":
                 raise RuntimeError(f"课程 {course_id} 文档状态：{document['status']}")
-            print(f"[READY] {course_id}: {document['chunk_count']} 个片段，文档 {document['id']}", flush=True)
+            print(f"[PENDING] {course_id}: {document['chunk_count']} 个片段，文档 {document['id']}；请在 /admin 审核发布", flush=True)
     return 0
 
 

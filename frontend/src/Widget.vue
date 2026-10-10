@@ -23,6 +23,7 @@ function failure(cause) {
   return cause.name !== 'AbortError';
 }
 const durable = !!props.config.history_enabled;
+const privacyUrl = props.api('privacy');
 const pageCourse = computed(() => props.pageContext ? props.pageContext.courseId : props.courseId);
 const pageTitle = computed(() => pageCourse.value === props.config.course_id ? props.config.course_title : null);
 const historyError = ref(''), historyLoading = ref(false), nextHistoryOffset = ref(null);
@@ -188,7 +189,10 @@ async function ask(preset, retryTurn) {
     if (['upstream_error', 'service_unavailable'].includes(result.error_type)) { turn.error = '服务暂时不可用，可重试本次提问。'; event('error'); }
     if (result.related_courses?.length) event('recommendation');
     if (showOwner(turn)) event('handoff');
-  } catch (cause) { if (failure(cause)) { turn.error = cause.message || '暂时无法连接，请稍后重试。'; event('error'); } }
+  } catch (cause) { if (failure(cause)) {
+    if (cause.discardAnswer) { turn.answer = ''; turn.parts = []; turn.result = null; }
+    turn.error = cause.message || '暂时无法连接，请稍后重试。'; event('error');
+  } }
   finally { if (current()) { busy.value = false; turn.thinking = false; await scrollAnswer(); if (current() && open.value) input.value?.focus({preventScroll: true}); } }
 }
 function showOwner(turn) {
@@ -296,7 +300,7 @@ async function copySummary(turn) {
         <ATextarea ref="input" v-model:value="draft" :disabled="busy" :auto-size="{minRows:2,maxRows:5}" :maxlength="2000" :bordered="false" aria-label="咨询内容" placeholder="问问课程，或说说你想学什么…" @keydown="keydown" />
         <div class="as-composer-footer"><span class="as-key-hint">Enter 发送 · Shift + Enter 换行</span><AButton class="as-send" type="primary" html-type="submit" aria-label="发送消息" title="发送消息" :disabled="busy || !draft.trim()"><UiIcon name="send" /></AButton></div>
       </form>
-      <p class="as-disclaimer">内容由 AI 辅助生成，重要信息请与课程顾问确认。</p>
+      <p class="as-disclaimer">咨询会保存必要记录，并发送必要上下文至模型服务商。请勿输入身份证、支付密码或内部资料。内容由 AI 辅助生成，重要信息请与课程顾问确认。</p>
     </div>
   </section>
   <AModal :open="editingSession !== null" title="重命名对话" :get-container="getPopupContainer" :z-index="2147483020" :width="340" :ok-button-props="{disabled:!renameValid}" ok-text="保存" cancel-text="取消" @ok="renameSession" @cancel="editingSession = null" destroy-on-close>

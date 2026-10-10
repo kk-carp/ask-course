@@ -56,6 +56,11 @@ from backend.services.intent_router import (
     recommend_has_direction,
     should_enter_guest_consultation,
 )
+from backend.services.knowledge_guard import (
+    ensure_published,
+    evidence_ids,
+    published_evidence,
+)
 from backend.services.profile_extraction import (
     extract_profile_updates,
     looks_like_profile,
@@ -126,6 +131,7 @@ def to_response(
         generation_called=result.llm_called,
         prompt_tokens=result.prompt_tokens,
         completion_tokens=result.completion_tokens,
+        knowledge_document_ids=list(result.knowledge_document_ids),
     )
 
 
@@ -467,9 +473,10 @@ def _iter_ask_turn(payload: AskRequest, identity: AskIdentity):
     response.completion_tokens += understanding.completion_tokens
     if is_usable_contact(settings.handoff_fallback_contact):
         response.fallback_contact = settings.handoff_fallback_contact
+    ensure_published(evidence_ids(response))
     if identity.consultation_owner and response.conversation_id:
         key = str(response.conversation_id)
-        with db.SessionLocal() as session:
+        with published_evidence(evidence_ids(response)), db.SessionLocal() as session:
             row = load_owned(session, key, identity.consultation_owner, lock=True)
             if row is None:
                 raise HTTPException(404, "会话不存在或已过期")
@@ -581,6 +588,7 @@ def _iter_questions(payload: AskRequest, identity: AskIdentity, understanding: U
         prompt_tokens=sum(result.prompt_tokens for result in responses),
         completion_tokens=sum(result.completion_tokens for result in responses),
         fact_sources=[source for result in responses for source in result.fact_sources],
+        knowledge_document_ids=list({key for result in responses for key in result.knowledge_document_ids}),
     )
     yield "final", response
 

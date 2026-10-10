@@ -121,6 +121,22 @@ class Settings(BaseSettings):
     # Website customers use a separate retention policy from anonymous visitors.
     customer_consultation_days: int = 90
 
+    # 上线前由业务负责人确认；不在界面编造运营主体或模型服务商。
+    privacy_operator: str = ""
+    privacy_contact: str = ""
+    privacy_model_provider: str = ""
+    privacy_reviewed: bool = False
+    monitoring_token: str = ""
+    monitoring_url: str = "http://api:8000"
+    monitoring_state_file: str = "data/operations/monitor-state.json"
+    monitoring_interval_seconds: int = Field(default=60, ge=5, le=300)
+    monitoring_error_rate: float = Field(default=0.05, gt=0, le=1)
+    monitoring_p95_ms: float = Field(default=30000, gt=0)
+    monitoring_rate_limit_count: int = Field(default=20, ge=1)
+    monitoring_daily_budget: float = Field(default=0, ge=0)
+    monitoring_input_price_per_million: float = Field(default=0, ge=0)
+    monitoring_output_price_per_million: float = Field(default=0, ge=0)
+
     # Opt-in only after website logout/revocation passes real verification.
     website_identity_enabled: bool = False
     website_identity_provider: str = "arborseek-production"
@@ -201,3 +217,11 @@ def assert_safe_for_environment() -> None:
         )
     ):
         raise RuntimeError("正式环境必须配置真实可访问的 HANDOFF_FALLBACK_CONTACT。")
+    if not settings.privacy_reviewed or not all(value.strip() for value in (
+        settings.privacy_operator, settings.privacy_contact, settings.privacy_model_provider,
+    )):
+        raise RuntimeError("正式环境必须填写隐私运营主体、联系渠道、模型服务商并确认 PRIVACY_REVIEWED。")
+    if settings.visitor_consultation_hours <= 0 or settings.data_retention_days <= 0:
+        raise RuntimeError("正式环境必须为游客及内部会话设置有限的正数保留期。")
+    if len(settings.monitoring_token) < 32:
+        raise RuntimeError("正式环境必须配置至少 32 字符的独立 MONITORING_TOKEN。")

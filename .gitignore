@@ -24,6 +24,7 @@ data/course_catalog.json
 data/eval/pilot-results*.json
 data/eval/pilot_gold.jsonl
 backups/
+data/operations/
 *.dump
 frontend/node_modules/
 frontend/dist/

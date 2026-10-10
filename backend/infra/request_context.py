@@ -9,6 +9,7 @@ from uuid import uuid4
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from backend.infra.metrics import record_latency
+from backend.infra.operations_metrics import record_http
 
 _REQUEST_ID_HEADER = b"x-request-id"
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
@@ -73,6 +74,8 @@ class RequestIdMiddleware:
         finally:
             method = scope.get("method", "")
             path = scope.get("path", "")
+            if path not in {"/health", "/ready", "/ops/metrics", "/metrics", "/metrics/funnel"}:
+                record_http(status_code, (time.perf_counter() - started) * 1000)
             if str(path).startswith('/widget/conversations'):
                 record_latency('widget_history_read' if method == 'GET' else 'widget_history_write',
                                (time.perf_counter() - started) * 1000)

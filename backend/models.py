@@ -26,6 +26,7 @@ class Base(DeclarativeBase):
 
 class DocumentStatus(str, Enum):
     processing = "processing"
+    pending = "pending"
     ready = "ready"
     failed = "failed"
     # 主动下线后不可检索（与 failed 一样排除在 SQL ready 条件外）
@@ -60,6 +61,7 @@ class Document(Base):
         String(32), nullable=False, default=DocumentStatus.processing.value
     )
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    supersedes_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -68,6 +70,18 @@ class Document(Base):
     chunks: Mapped[list["Chunk"]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
     )
+
+
+class DocumentReview(Base):
+    """Append-only publication/withdrawal evidence, retained after file deletion."""
+
+    __tablename__ = "document_reviews"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    document_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    actor_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    note: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class User(Base):

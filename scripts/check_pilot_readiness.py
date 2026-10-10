@@ -9,6 +9,7 @@ from pathlib import Path
 
 import httpx
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -21,6 +22,7 @@ from backend.models import Document, DocumentStatus, TopicOwner  # noqa: E402
 from backend.services.approved_courses import get_approved_course  # noqa: E402
 from backend.services.course_qr_service import lookup_official_presale  # noqa: E402
 from backend.services.topic_owner_service import is_usable_contact  # noqa: E402
+from scripts.audit_materials import audit_database, audit_files
 
 
 def _content_complete(course_id: str, catalog_path: Path) -> bool:
@@ -53,6 +55,22 @@ def _contact_reachable(client: httpx.Client, contact: str) -> bool:
 
 def check(*, verify_http: bool = True) -> list[str]:
     failures: list[str] = []
+    if not settings.privacy_reviewed or not all(value.strip() for value in (
+        settings.privacy_operator, settings.privacy_contact, settings.privacy_model_provider,
+    )):
+        failures.append("隐私运营主体、联系渠道及模型服务商尚未完成确认")
+    if len(settings.monitoring_token) < 32:
+        failures.append("缺少独立监控凭证")
+    if min(settings.monitoring_daily_budget, settings.monitoring_input_price_per_million,
+           settings.monitoring_output_price_per_million) <= 0:
+        failures.append("模型计费单价或每日预算尚未配置")
+    try:
+        inspected = audit_files([ROOT / "data/course_facts.json", ROOT / "data/approved_courses.json", ROOT / "data/course_content"])
+        inspected.extend(audit_database())
+        if any(not row["passed"] for row in inspected):
+            failures.append("资料安全扫描或历史资料人工复核尚未通过；运行 scripts/audit_materials.py --database 查看")
+    except (SQLAlchemyError, ValueError, OSError, RuntimeError):
+        failures.append("无法完成资料安全检查（需先迁移数据库并检查连接）")
     ids = [x.strip() for x in settings.pilot_course_ids.split(",") if x.strip()]
     if not ids:
         failures.append("PILOT_COURSE_IDS 未配置")

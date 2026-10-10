@@ -11,6 +11,8 @@ from sqlalchemy import select
 from backend.config import settings
 from backend.models import Chunk, Document
 from backend.services import ingest_service as ingest
+from backend.services.document_admin_service import DocumentDeleteError, publish_document, set_document_offline
+from backend.services.material_safety import REVIEW_CHECKS
 
 
 @pytest.fixture
@@ -25,8 +27,11 @@ def ingest_store(postgres_store, monkeypatch, tmp_path):
 
 def upload(*, replace=False, name="course.txt"):
     with BytesIO(b"robot hardware syllabus") as content:
-        return ingest.ingest_document(UploadFile(filename=name, file=content), "courses",
-                                      replace=replace, course_id="43")
+        result = ingest.ingest_document(UploadFile(filename=name, file=content), "courses",
+                                       replace=replace, course_id="43")
+    if not replace:
+        return publish_document(str(result.id), actor_id="reviewer", note="Test course reviewed", safety_checks=dict.fromkeys(REVIEW_CHECKS, True))
+    return result
 
 
 @pytest.mark.parametrize("failure", ["save", "parse", "embedding", "persist"])
@@ -62,6 +67,10 @@ def test_successful_replacement_has_no_knowledge_gap(ingest_store, monkeypatch):
     monkeypatch.setattr(ingest, "parse_document", inspect_old)
     new = upload(replace=True)
     with ingest_store() as session:
+        assert session.get(Document, str(old.id)).status == "ready"
+        assert session.get(Document, str(new.id)).status == "pending"
+    publish_document(str(new.id), actor_id="reviewer", note="Replacement reviewed", safety_checks=dict.fromkeys(REVIEW_CHECKS, True))
+    with ingest_store() as session:
         assert session.get(Document, str(old.id)).status == "offline"
         assert session.get(Document, str(new.id)).status == "ready"
     with pytest.raises(ingest.DuplicateDocumentError):
@@ -79,8 +88,9 @@ def test_withdrawal_during_replacement_is_not_undone(ingest_store, monkeypatch):
         return parse(*args)
 
     monkeypatch.setattr(ingest, "parse_document", withdraw)
-    with pytest.raises(ValueError, match="重新上传"):
-        upload(replace=True)
+    candidate = upload(replace=True)
+    with pytest.raises(DocumentDeleteError, match="原资料已变化"):
+        publish_document(str(candidate.id), actor_id="reviewer", note="reviewed", safety_checks=dict.fromkeys(REVIEW_CHECKS, True))
     with ingest_store() as session:
         assert not list(session.scalars(select(Document).where(Document.status == "ready")))
 
@@ -124,14 +134,13 @@ def test_concurrent_replacements_publish_only_one_candidate(ingest_store, monkey
     def attempt():
         try:
             return upload(replace=True).status
-        except ValueError as exc:
-            assert "重新上传" in str(exc)
+        except ingest.DuplicateDocumentError:
             return "conflict"
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [pool.submit(attempt) for _ in range(2)]
-        assert sorted(future.result(timeout=10) for future in futures) == ["conflict", "ready"]
+        assert sorted(future.result(timeout=10) for future in futures) == ["conflict", "pending"]
     with ingest_store() as session:
-        assert session.get(Document, str(old.id)).status == "offline"
+        assert session.get(Document, str(old.id)).status == "ready"
         assert len(list(session.scalars(select(Document).where(Document.status == "ready")))) == 1
         assert len(list(session.scalars(select(Document).where(Document.status == "failed")))) == 1

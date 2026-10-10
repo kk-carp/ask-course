@@ -3,26 +3,68 @@
 import json
 import logging
 from dataclasses import replace
+from typing import Annotated
 
+from anyio import CancelScope
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
 from backend import db
 from backend.config import settings
 from backend.domain.guest import guest_context, issue_visitor_id, read_visitor_id
+from backend.domain.website_owner import VerifiedCustomerIdentity, as_owner
 from backend.infra.metrics import record_429
 from backend.infra.rate_limit import RATE_LIMIT_DETAIL, allow, allow_ask
 from backend.schemas import AskRequest, AskResponse
 from backend.services.ask_orchestrator import AskIdentity, iter_ask_turn, run_ask_turn
 from backend.services.auth_service import load_auth_context
+from backend.services.knowledge_guard import (
+    ensure_published,
+    evidence_ids,
+    published_evidence,
+)
 from backend.services.pilot_service import eligible, site_course_ids, site_eligible
-from backend.services.widget_history import abandon_turn, begin_turn, finish_turn
 from backend.services.website_identity import resolve_owner, verified_website_identity
-from backend.domain.website_owner import VerifiedCustomerIdentity, as_owner
+from backend.services.widget_history import abandon_turn, begin_turn, finish_turn
 
 router = APIRouter(tags=["ask"])
 _log = logging.getLogger(__name__)
+
+
+class PublishedAnswerResponse(JSONResponse):
+    """Keep the publication check valid through ASGI output, not just serialization."""
+
+    def __init__(self, answer: AskResponse, headers: Response):
+        super().__init__(answer.model_dump(mode="json"))
+        self.document_ids = evidence_ids(answer)
+        for name, value in headers.raw_headers:
+            if name.lower() == b"set-cookie":
+                self.raw_headers.append((name, value))
+
+    async def __call__(self, scope, receive, send):
+        guard = published_evidence(self.document_ids)
+        await run_in_threadpool(guard.__enter__)
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            with CancelScope(shield=True):
+                await run_in_threadpool(guard.__exit__, None, None, None)
+
+
+class ReviewedStreamResponse(StreamingResponse):
+    """Release an output guard even when the browser disconnects after a frame."""
+
+    def __init__(self, iterator, **kwargs):
+        self.event_iterator = iterator
+        super().__init__(iterator, **kwargs)
+
+    async def __call__(self, scope, receive, send):
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            with CancelScope(shield=True):
+                await run_in_threadpool(self.event_iterator.close)
 
 
 def _sse_pack(event: str, data: dict) -> str:
@@ -81,13 +123,14 @@ def _website_turns(payload, identity):
     with db.SessionLocal() as session:
         cached, first, claim_id = begin_turn(session, key, identity.consultation_owner, request_key, payload.question)
     if cached:
+        ensure_published(evidence_ids(cached))
         yield 'final', cached
         return
     try:
         for name, result in iter_ask_turn(payload, replace(identity, first_turn=first)):
             identity.consultation_owner.validate()
             if name == 'final' and result.error_type not in {'upstream_error', 'service_unavailable'}:
-                with db.SessionLocal() as session:
+                with published_evidence(evidence_ids(result)), db.SessionLocal() as session:
                     finish_turn(session, key, identity.consultation_owner, request_key, payload.question, result, claim_id)
             yield name, result
     finally:
@@ -97,18 +140,22 @@ def _website_turns(payload, identity):
 
 @router.post("/ask", response_model=AskResponse)
 async def ask(payload: AskRequest, request: Request, response: Response,
-              verified: VerifiedCustomerIdentity | None = Depends(verified_website_identity)) -> AskResponse:
+              verified: Annotated[VerifiedCustomerIdentity | None, Depends(verified_website_identity)]) -> AskResponse:
     identity = await run_in_threadpool(_prepare_request, payload, request, response, verified)
     if payload.channel != 'site_widget':
-        return await run_in_threadpool(run_ask_turn, payload, identity)
+        result = await run_in_threadpool(run_ask_turn, payload, identity)
+        await run_in_threadpool(ensure_published, evidence_ids(result))
+        return PublishedAnswerResponse(result, response)
     def run():
         return next(result for name, result in _website_turns(payload, identity) if name == 'final')
-    return await run_in_threadpool(run)
+    result = await run_in_threadpool(run)
+    await run_in_threadpool(ensure_published, evidence_ids(result))
+    return PublishedAnswerResponse(result, response)
 
 
 @router.post("/ask/stream")
 async def ask_stream(payload: AskRequest, request: Request, response: Response,
-                     verified: VerifiedCustomerIdentity | None = Depends(verified_website_identity)) -> StreamingResponse:
+                     verified: Annotated[VerifiedCustomerIdentity | None, Depends(verified_website_identity)]) -> StreamingResponse:
     identity = await run_in_threadpool(_prepare_request, payload, request, response, verified)
 
     def events():
@@ -116,19 +163,23 @@ async def ask_stream(payload: AskRequest, request: Request, response: Response,
         try:
             for name, result in _website_turns(payload, identity):
                 if name == "part":
-                    yield _sse_pack("part", result)
+                    with published_evidence(evidence_ids(result)):
+                        yield _sse_pack("part", result)
                 else:
                     data = result.model_dump(mode="json")
-                    yield _sse_pack("meta", {key: data[key] for key in ("hit", "sources", "conversation_id", "related_courses", "intent")})
-                    yield _sse_pack("final", data)
+                    with published_evidence(evidence_ids(result)):
+                        yield _sse_pack("meta", {key: data[key] for key in ("hit", "sources", "conversation_id", "related_courses", "intent")})
+                    with published_evidence(evidence_ids(result)):
+                        yield _sse_pack("final", data)
         except HTTPException as exc:
-            yield _sse_pack("error", {"status": exc.status_code, "detail": exc.detail})
+            yield _sse_pack("error", {"status": exc.status_code, "detail": exc.detail,
+                                      "discard_answer": True})
         except Exception:
             _log.exception("stream turn failed")
-            yield _sse_pack("error", {"status": 500, "detail": "问答暂时不可用，请稍后重试"})
+            yield _sse_pack("error", {"status": 500, "detail": "问答暂时不可用，请稍后重试", "discard_answer": True})
         yield _sse_pack("done", {})
 
-    stream = StreamingResponse(events(), media_type="text/event-stream", headers={
+    stream = ReviewedStreamResponse(events(), media_type="text/event-stream", headers={
         "Cache-Control": "no-cache", "X-Accel-Buffering": "no",
     })
     for name, value in response.raw_headers:

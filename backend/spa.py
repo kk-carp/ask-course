@@ -51,6 +51,11 @@ def register_frontend(app: FastAPI) -> None:
     def admin_page() -> FileResponse:
         return FileResponse(frontend_dir / "admin.html", media_type="text/html; charset=utf-8", headers=_DEMO_HEADERS)
 
+    @app.get("/admin-documents.js", include_in_schema=False)
+    def admin_documents_script() -> FileResponse:
+        return FileResponse(frontend_dir / "admin-documents.js", media_type="text/javascript; charset=utf-8",
+                            headers={"Cache-Control": "no-store"})
+
     if WIDGET_SCRIPT.is_file():
         @app.get("/widget.js", include_in_schema=False)
         def widget_script() -> FileResponse:

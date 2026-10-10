@@ -69,6 +69,7 @@ class AskResponse(BaseModel):
     answer: str
     hit: bool | None = None
     sources: list[SourceItem] = Field(default_factory=list)
+    knowledge_document_ids: list[UUID] = Field(default_factory=list)
     conversation_id: UUID | None = None
     owner: OwnerInfo | None = None
     related_courses: list[RelatedCourse] = Field(default_factory=list)
@@ -125,6 +126,13 @@ class DocumentResponse(BaseModel):
     chunk_count: int
     error: str | None = None
     path: str | None = None
+    supersedes_id: str | None = None
+    reviews: list[dict[str, str]] = Field(default_factory=list)
+
+
+class DocumentPublishRequest(BaseModel):
+    note: str = Field(min_length=1, max_length=1000)
+    safety_checks: dict[str, bool] = Field(default_factory=dict)
 
 
 class DocumentIdListRequest(BaseModel):

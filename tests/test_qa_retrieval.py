@@ -11,6 +11,8 @@ def test_retrieval_returns_chunks_and_answer_uses_them(monkeypatch):
     monkeypatch.setattr(qa_service, "is_loaded", lambda: True)
     monkeypatch.setattr(qa_service, "encode_query", lambda _: [1.0])
     monkeypatch.setattr(qa_service, "run_retrieval", lambda **_: chunks)
+    # This unit test supplies synthetic retrieval; database withdrawal is covered separately.
+    monkeypatch.setattr(qa_service, "ensure_published", lambda _ids: None)
     calls = []
 
     def generate(question, retrieved):

@@ -29,7 +29,7 @@ def resolve_stored_path(file_path: str) -> Path | None:
     return path
 
 
-def open_document_file(document_id: str, allowed_spaces: list[str]) -> tuple[Path, str]:
+def open_document_file(document_id: str, allowed_spaces: list[str], *, allow_unpublished: bool = False) -> tuple[Path, str]:
     """返回本地文件路径与下载名；无权限 403，不存在或不可用 404。"""
     db.init_engine()
     if db.SessionLocal is None:
@@ -41,7 +41,7 @@ def open_document_file(document_id: str, allowed_spaces: list[str]) -> tuple[Pat
             raise DocumentFileError(404, "文档不存在")
         if document.space_id not in allowed_spaces:
             raise DocumentFileError(403, "没有权限查看该文档")
-        if document.status != DocumentStatus.ready.value:
+        if document.status != DocumentStatus.ready.value and not allow_unpublished:
             raise DocumentFileError(404, "文档不可下载")
         stored = resolve_stored_path(document.file_path)
         if stored is None:

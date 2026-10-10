@@ -10,6 +10,7 @@ def frontend_app(tmp_path, monkeypatch, built=True):
     dist.mkdir(parents=True)
     (frontend / "admin.html").write_text("内部管理", encoding="utf-8")
     (frontend / "answer-format.js").write_text("/* helper */", encoding="utf-8")
+    (frontend / "admin-documents.js").write_text("/* document maintenance */", encoding="utf-8")
     if built:
         (dist / "index.html").write_text('<script src="./widget.js" data-preview="true"></script>', encoding="utf-8")
         (dist / "widget.js").write_text("/* Vue widget */", encoding="utf-8")
@@ -31,6 +32,10 @@ def test_public_widget_and_internal_management_have_separate_entries(tmp_path, m
         assert "内部管理" not in response.text
     assert "Vue widget" in client.get("/widget.js").text
     assert "内部管理" in client.get("/admin").text
+    helper = client.get("/admin-documents.js")
+    assert helper.status_code == 200
+    assert "document maintenance" in helper.text
+    assert helper.headers["cache-control"] == "no-store"
     assert client.get("/src/main.js").status_code == 404
     standalone = client.get("/consult")
     assert standalone.status_code == 200

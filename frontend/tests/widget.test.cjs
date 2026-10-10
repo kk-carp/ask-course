@@ -45,6 +45,32 @@ async function send(f, text) {
   f.shadow.querySelector('form').dispatchEvent(new f.win.Event('submit', {bubbles:true,cancelable:true}));
   await tick();
 }
+
+test('privacy summary is visible before sending without a navigation link', async t => {
+  const f = await fixture(); t.after(() => f.dom.window.close());
+  f.shadow.querySelector('.as-launch').click(); await tick();
+  assert.ok(![...f.shadow.querySelectorAll('a')].some(item => item.href.includes('/privacy')));
+  assert.match(f.shadow.textContent, /请勿输入身份证/);
+  assert.ok(!f.calls.some(call => call.url.includes('ask/stream')));
+});
+
+test('withdrawal error clears already displayed partial answer and offers retry', async t => {
+  let controller;
+  const encoder = new TextEncoder();
+  const f = await fixture({handler: () => new Response(new ReadableStream({start(value) {
+    controller = value;
+    value.enqueue(encoder.encode('event: part\ndata: '+JSON.stringify({index:1, question:'课程内容', answer:'已撤回的错误资料'})+'\n\n'));
+  }}))});
+  t.after(() => f.dom.window.close());
+  f.shadow.querySelector('.as-launch').click(); await tick();
+  await send(f, '课程内容');
+  assert.match(f.shadow.textContent, /已撤回的错误资料/);
+  controller.enqueue(encoder.encode('event: error\ndata: '+JSON.stringify({status:409, discard_answer:true, detail:'资料已撤回，请重新提问'})+'\n\n'));
+  controller.close(); await tick();
+  assert.doesNotMatch(f.shadow.textContent, /已撤回的错误资料/);
+  assert.match(f.shadow.textContent, /资料已撤回，请重新提问/);
+  assert.match(f.shadow.textContent, /重试本次提问/);
+});
 test('Vue public page contains only a collapsed assistant, retains draft and restores page scrolling', async t => {
   const f = await fixture(); t.after(() => f.dom.window.close());
   assert.equal(f.shadow.querySelector('.as-panel').style.display, 'none');

@@ -19,6 +19,7 @@ from backend.services.conversation_service import (
     get_or_create_conversation,
     load_context_for_generate,
 )
+from backend.services.knowledge_guard import ensure_published, published_evidence
 
 MISS_ANSWER = "知识库中没有足够依据回答这个问题。"
 SOURCE_SNIPPET_CHARS = 160
@@ -36,6 +37,7 @@ class AskResult:
     llm_called: bool = False
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    knowledge_document_ids: tuple[UUID, ...] = ()
 
 
 def _snippet_from_content(content: str, limit: int = SOURCE_SNIPPET_CHARS) -> str:
@@ -194,6 +196,8 @@ def answer_question(
         )
         if not retrieved:
             return _miss_result()
+        document_ids = tuple({item.document_id for item in retrieved})
+        ensure_published(document_ids)
         try:
             generated = generate_answer(
                 normalized_question,
@@ -224,13 +228,14 @@ def answer_question(
             )
             raise
         answer = generated.text
-        append_turn(
-            session,
-            conversation=conversation,
-            user_content=normalized_question,
-            assistant_content=answer,
-        )
-        session.commit()
+        with published_evidence(document_ids):
+            append_turn(
+                session,
+                conversation=conversation,
+                user_content=normalized_question,
+                assistant_content=answer,
+            )
+            session.commit()
         sources = _build_sources(retrieved)
         _write_audit(
             user_id=user_id,
@@ -252,6 +257,7 @@ def answer_question(
             llm_called=True,
             prompt_tokens=generated.usage.prompt_tokens,
             completion_tokens=generated.usage.completion_tokens,
+            knowledge_document_ids=document_ids,
         )
 
 
@@ -267,6 +273,8 @@ def _answer_without_conversation(
     if not retrieved:
         _write_audit(user_id=None, user_role=user_role, allowed_spaces=allowed_spaces, hit=False, document_ids=[], error_type="miss")
         return AskResult(answer=MISS_ANSWER, hit=False, sources=[])
+    document_ids = tuple({item.document_id for item in retrieved})
+    ensure_published(document_ids)
     try:
         generated = generate_answer(normalized_question, retrieved)
     except UpstreamServiceError:
@@ -275,6 +283,7 @@ def _answer_without_conversation(
     except ServiceUnavailableError:
         _write_audit(user_id=None, user_role=user_role, allowed_spaces=allowed_spaces, hit=None, document_ids=[str(item.document_id) for item in retrieved], error_type="503")
         raise
+    ensure_published(document_ids)
     _write_audit(user_id=None, user_role=user_role, allowed_spaces=allowed_spaces, hit=True, document_ids=[str(item.document_id) for item in retrieved], error_type="hit", llm_called=True, prompt_tokens=generated.usage.prompt_tokens, completion_tokens=generated.usage.completion_tokens)
     return AskResult(
         answer=generated.text,
@@ -283,4 +292,5 @@ def _answer_without_conversation(
         llm_called=True,
         prompt_tokens=generated.usage.prompt_tokens,
         completion_tokens=generated.usage.completion_tokens,
+        knowledge_document_ids=document_ids,
     )

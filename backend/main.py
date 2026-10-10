@@ -30,6 +30,7 @@ from backend.routes import (
     documents,
     health,
     metrics,
+    privacy,
     topic_owners,
     widget_history,
 )
@@ -105,6 +106,7 @@ app.add_middleware(RequestIdMiddleware)
 
 app.include_router(health.router)
 app.include_router(metrics.router)
+app.include_router(privacy.router)
 app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(ask.router)

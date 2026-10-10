@@ -6,6 +6,7 @@ COPY frontend ./
 RUN npm run build
 
 FROM python:3.11-slim
+LABEL agent.schema="0004" agent.safety-contract="2026-10-10"
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 HF_HOME=/app/model-cache
 RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*

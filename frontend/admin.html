@@ -282,6 +282,7 @@
       padding: 8px 10px;
       background: #fff;
     }
+    .drawer select { width: 100%; max-width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
     .row-actions { display: flex; gap: 8px; margin-top: 10px; }
     .ghost, .danger {
       border-radius: 10px;
@@ -291,6 +292,8 @@
     .ghost { border: 1px solid var(--line); background: #fff; }
     .danger { border: 0; background: var(--flag); color: #fff; }
     .docs { margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+    .document-card { padding: 12px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+    .document-card .row-actions { flex-wrap: wrap; align-items: center; }
     .err { color: var(--flag); font-size: 13px; margin-top: 8px; }
     @media (max-width: 860px) {
       .layout, .mast { grid-template-columns: 1fr; }
@@ -354,20 +357,30 @@
             <label for="username">账号</label>
             <input id="username" name="username" value="p0_admin" autocomplete="username" />
             <label for="password">密码</label>
-            <input id="password" name="password" type="password" value="demo1234" autocomplete="current-password" />
+            <input id="password" name="password" type="password" autocomplete="current-password" />
             <div class="row-actions">
               <button class="ghost" type="submit">登录</button>
               <button class="ghost" id="logout" type="button">退出</button>
             </div>
           </form>
           <form id="upload-form" hidden>
+            <label for="replacement-target">资料用途</label>
+            <select id="replacement-target"><option value="">新增独立资料</option></select>
             <label for="file">上传课程文本（md / txt / pdf / docx / pptx）</label>
             <input id="file" name="file" type="file" accept=".md,.txt,.pdf,.docx,.pptx,text/markdown,text/plain" />
             <div class="row-actions">
-              <button class="ghost" type="submit">入库到 courses</button>
+              <button class="ghost" type="submit">上传待审核资料</button>
             </div>
-            <div class="docs" id="docs"></div>
           </form>
+          <section id="document-tools" hidden aria-label="课程资料管理">
+            <p class="hint">上传后先待审核，不参与回答。请下载核对原文，再填写审核依据并发布。上传新版时选择要替换的资料，审核发布前旧版保持可用。撤回后不能重新发布；永久删除前须先撤回。</p>
+            <div class="docs" id="docs" aria-live="polite"></div>
+          </section>
+          <section id="operations-tools" hidden aria-label="运行告警">
+            <h3>运行告警</h3>
+            <button type="button" class="ghost" id="refresh-alerts">查看最新告警</button>
+            <p id="operations-status" class="hint" aria-live="polite" style="white-space:pre-wrap">点击查看采集器状态和费用估算。</p>
+          </section>
           <p class="err" id="admin-err" hidden></p>
         </div>
       </aside>
@@ -391,6 +404,7 @@
 
   <script src="./vendor/answer-libs.js"></script>
   <script src="./answer-format.js"></script>
+  <script src="./admin-documents.js"></script>
   <script>
     const COURSES = [
       { id: "", name: "未指定课程", sub: "按官网课程列表自动匹配" },
@@ -401,6 +415,10 @@
 
     const state = { courseId: "", conversationId: null, asking: false, me: null };
     const $ = (id) => document.getElementById(id);
+    const documentManager = createDocumentManager({
+      root: $("docs"), getUser: () => state.me, getCourseId: () => state.courseId,
+      showError: message => showAdminErr(message),
+    });
 
     function escapeHtml(text) {
       return String(text ?? "").replace(/[&<>"']/g, (ch) => ({
@@ -462,12 +480,16 @@
     }
 
     function setWho() {
+      const canManage = Boolean(state.me?.can_manage_documents);
+      $("upload-form").hidden = !canManage;
+      $("document-tools").hidden = !canManage;
+      $("operations-tools").hidden = !canManage;
+      $("operations-status").textContent = "点击查看采集器状态和费用估算。";
+      documentManager.clear();
       if (state.me) {
-        $("who").textContent = `已登录 ${state.me.username} · 可灌库与改映射`;
-        $("upload-form").hidden = !state.me.can_manage_documents;
+        $("who").textContent = `已登录 ${state.me.username} · ${canManage ? "可维护课程资料" : "无资料管理权限"}`;
       } else {
         $("who").textContent = "游客态 · 可提问，不能灌库";
-        $("upload-form").hidden = true;
       }
     }
 
@@ -659,13 +681,31 @@
     }
 
     async function refreshDocs() {
-      const res = await fetch("/documents", { credentials: "include" });
-      if (!res.ok) return;
-      const items = await res.json();
-      $("docs").innerHTML = items.length
-        ? items.map((item) => `${escapeHtml(item.title)} · 课程 ${escapeHtml(item.course_id || "未标注")} · ${escapeHtml(item.status)} · ${item.chunk_count} 片`).join("<br>")
-        : "课程空间还没有文档。";
+      await documentManager.refresh();
     }
+
+    $("refresh-alerts").addEventListener("click", async () => {
+      const owner = state.me;
+      if (!owner?.can_manage_documents) return;
+      const button = $("refresh-alerts");
+      button.disabled = true;
+      const labels = {service_unavailable:"服务不可用", metrics_unavailable:"指标采集失败",
+        collector_stale_or_not_started:"监控未启动或已失联", http_error_rate:"接口错误过多",
+        model_error_rate:"模型故障过多", model_timeout:"模型超时", request_latency_p95:"回答耗时过长",
+        abnormal_rate_limited_calls:"异常限流调用增多", cost_monitor_not_configured:"模型单价或预算未配置",
+        model_usage_missing_cost_incomplete:"模型未返回完整用量，费用可能漏计",
+        daily_cost_budget:"已达到当日费用预算", process_restarted_sampling_gap:"服务重启，用量可能存在采样缺口"};
+      try {
+        const response = await fetch("/metrics/alerts", {credentials:"include", cache:"no-store"});
+        if (!response.ok) throw new Error("暂时无法读取告警，请检查登录状态和服务。");
+        const data = await response.json();
+        if (state.me !== owner) return;
+        const messages = (data.alerts || []).map(item => `${item.severity === 'critical' ? '严重' : '提醒'}：${labels[item.code] || item.code}`);
+        $("operations-status").textContent = `${messages.length ? messages.join('\n') : '当前没有触发告警。'}\n今日估算费用：${data.estimated_cost ?? '暂无数据'}（按配置货币，仅供参考）\n更新时间：${data.updated_at ? new Date(data.updated_at * 1000).toLocaleString() : '尚未采集'}`;
+      } catch (error) {
+        if (state.me === owner) $("operations-status").textContent = error.message;
+      } finally { button.disabled = false; }
+    });
 
     function showAdminErr(message) {
       $("admin-err").hidden = !message;
@@ -678,6 +718,7 @@
       state.courseId = btn.dataset.id;
       renderCourses();
       renderPrompts();
+      documentManager.render();
     });
     $("log").addEventListener("click", async (event) => {
       const copy = event.target.closest("button[data-copy-summary]");
@@ -739,9 +780,13 @@
       refreshDocs();
     });
     $("logout").addEventListener("click", async () => {
-      await fetch("/logout", { method: "POST", credentials: "include" });
-      state.me = null;
-      setWho();
+      try {
+        const res = await fetch("/logout", { method: "POST", credentials: "include" });
+        if (!res.ok) throw new Error("退出失败，请重试。");
+        state.me = null;
+        setWho();
+        showAdminErr("");
+      } catch (error) { showAdminErr(error.message || "退出失败，请重试。"); }
     });
     $("upload-form").addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -756,15 +801,22 @@
       data.append("space", "courses");
       data.append("course_id", state.courseId);
       data.append("file", file);
+      if ($("replacement-target").value) data.append("supersedes_id", $("replacement-target").value);
       if (replace) data.append("replace", "true");
-      const res = await fetch("/documents", { method: "POST", credentials: "include", body: data });
-      if (!res.ok) {
-        const detail = await res.json().catch(() => ({}));
-        showAdminErr(typeof detail.detail === "string" ? detail.detail : "入库失败");
-        return;
-      }
-      $("file").value = "";
-      refreshDocs();
+      const submit = $("upload-form").querySelector('button[type="submit"]');
+      if (submit.disabled) return;
+      submit.disabled = true;
+      try {
+        const res = await fetch("/documents", { method: "POST", credentials: "include", body: data });
+        if (!res.ok) {
+          const detail = await res.json().catch(() => ({}));
+          throw new Error(typeof detail.detail === "string" ? detail.detail :
+            (res.status === 409 ? "同内容资料已存在，请查看列表；当前上传不会替换其他内容。" : "入库失败"));
+        }
+        $("file").value = "";
+        await refreshDocs();
+      } catch (error) { showAdminErr(error.message || "上传失败，请重试。"); }
+      finally { submit.disabled = false; }
     }
 
     renderCourses();

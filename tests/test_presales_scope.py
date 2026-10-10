@@ -9,7 +9,6 @@ from fastapi import UploadFile
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from backend import db
 from backend.config import settings
@@ -22,6 +21,7 @@ from backend.infra.storage import save_upload
 from backend.main import app
 from backend.models import (
     Conversation,
+    Document,
     Message,
     Space,
     SpaceMember,
@@ -36,17 +36,24 @@ from backend.services.handoff_service import HandoffResult
 
 
 @pytest.fixture
-def sessions(monkeypatch):
+def sessions(monkeypatch, tmp_path):
     engine = create_engine(
-        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+        f"sqlite:///{(tmp_path / 'presales.db').as_posix()}", connect_args={"check_same_thread": False}
     )
-    for table in (Space, User, SpaceMember, Conversation, Message, VisitorConsultation):
+    for table in (Space, Document, User, SpaceMember, Conversation, Message, VisitorConsultation):
         table.__table__.create(engine)
     factory = sessionmaker(engine)
     monkeypatch.setattr(db, "init_engine", lambda: engine)
     monkeypatch.setattr(db, "SessionLocal", factory)
     yield factory
     engine.dispose()
+
+
+def seed_source(sessions, chunk):
+    with sessions() as session:
+        session.add(Document(id=str(chunk.document_id), title=chunk.title, space_id=chunk.space_id,
+                             file_path="test-only.md", status="ready"))
+        session.commit()
 
 
 def fail_model(*_args, **_kwargs):
@@ -116,6 +123,7 @@ def test_course_answer_preserves_sources_and_history(
         title="四足机器人课程",
         space_id=settings.course_space_id,
     )
+    seed_source(sessions, chunk)
     monkeypatch.setattr(qa_service, "is_loaded", lambda: True)
     monkeypatch.setattr(qa_service, "_retrieve", lambda *_a, **_k: [chunk])
     generated = ChatResult("课程周期为十二周。", ChatUsage(12, 8))
@@ -141,12 +149,13 @@ def test_generation_requires_knowledge_even_with_history():
         generate.generate_answer("有没有证书？", [], history=[("assistant", "保证拿证")])
 
 
-def test_guest_history_only_guides_local_retrieval(monkeypatch):
+def test_guest_history_only_guides_local_retrieval(monkeypatch, sessions):
     chunk = RetrievedChunk(
         content="课程资料说明了基础要求。", score=0.9,
         document_id=uuid4(), title="课程资料", space_id=settings.course_space_id,
     )
     seen = {}
+    seed_source(sessions, chunk)
     monkeypatch.setattr(qa_service, "is_loaded", lambda: True)
 
     def retrieve(*_args, **kwargs):
@@ -302,6 +311,7 @@ def test_model_failure_does_not_save_answer(monkeypatch, sessions, stream):
         title="课程",
         space_id=settings.course_space_id,
     )
+    seed_source(sessions, chunk)
     monkeypatch.setattr(qa_service, "is_loaded", lambda: True)
     monkeypatch.setattr(qa_service, "_retrieve", lambda *_a, **_k: [chunk])
 

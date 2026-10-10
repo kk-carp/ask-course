@@ -32,7 +32,7 @@ def test_migration_preserves_legacy_data_and_is_repeatable(postgres_store):
         assert row.visitor_id == "legacy-visitor"
         assert row.last_activity_at is not None
         assert not row.widget_session
-        assert session.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
+        assert session.scalar(text("SELECT version_num FROM alembic_version")) == "0004"
 
 
 def test_dense_and_lexical_filter_before_returning_results(postgres_store):
@@ -48,6 +48,7 @@ def test_dense_and_lexical_filter_before_returning_results(postgres_store):
             ("courses", "43", "offline"),
             ("courses", "43", "processing"),
             ("courses", "43", "failed"),
+            ("courses", "43", "pending"),
             ("private-test", "43", "ready"),
         ]:
             doc = Document(space_id=space, course_id=course, status=status,

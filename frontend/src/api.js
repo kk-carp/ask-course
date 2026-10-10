@@ -35,7 +35,7 @@ export async function streamAsk(api, payload, onPart, {signal} = {}) {
     const data = JSON.parse(raw);
     if (name === 'part') onPart(data);
     if (name === 'final') result = data;
-    if (name === 'error') throw Object.assign(new Error(data.detail || '咨询暂时不可用'), {status:data.status});
+    if (name === 'error') throw Object.assign(new Error(data.detail || '咨询暂时不可用'), {status:data.status, discardAnswer: data.discard_answer});
   }
   try {
     while (true) {
