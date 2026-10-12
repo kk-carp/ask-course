@@ -410,51 +410,73 @@
     },
     {
       "id": "42",
-      "status": "recommendable",
+      "status": "approved",
       "title": "高校大学生AI大模型企业实战训练营",
       "source_url": "https://www.arborseek.com/course/42",
       "source_snapshot": "data/official_course_drafts/42.json",
-      "audience": "",
-      "prerequisites": "",
-      "goals": [],
-      "goal_keywords": [],
-      "requires_hardware": null,
-      "min_basis": null,
-      "min_weekly_hours": null,
-      "purchase_url": "",
+      "audience": "具备 Python 基础、希望学习 AI 智能体应用开发的高校学生与开发者",
+      "prerequisites": "具备 Python 基础编程能力，能编写函数和导入库；普通电脑可通过在线 API 完成实践，无需 GPU。",
+      "goals": [
+        "构建 RAG 知识库问答系统",
+        "开发工具化 Agent 与多智能体协作系统",
+        "整合多模态与通用智能体项目"
+      ],
+      "goal_keywords": [
+        "AI",
+        "大模型",
+        "智能体",
+        "Agent",
+        "RAG",
+        "多智能体"
+      ],
+      "requires_hardware": false,
+      "min_basis": "basic",
+      "min_weekly_hours": 3,
+      "purchase_url": "https://www.arborseek.com/course/42",
       "review_checks": {
-        "sale_status_confirmed": false,
-        "purchase_page_checked": false,
-        "course_facts_checked": false,
-        "course_content_checked": false,
-        "presale_contact_checked": false
+        "sale_status_confirmed": true,
+        "purchase_page_checked": true,
+        "course_facts_checked": true,
+        "course_content_checked": true,
+        "presale_contact_checked": true
       },
-      "reviewer": "",
-      "reviewed_at": ""
+      "reviewer": "Tianshu（本会话确认）",
+      "reviewed_at": "2026-10-12"
     },
     {
       "id": "43",
-      "status": "recommendable",
+      "status": "approved",
       "title": "四足机器人无人巡检实训营",
       "source_url": "https://www.arborseek.com/course/43",
       "source_snapshot": "data/official_course_drafts/43.json",
-      "audience": "",
-      "prerequisites": "",
-      "goals": [],
-      "goal_keywords": [],
-      "requires_hardware": null,
-      "min_basis": null,
-      "min_weekly_hours": null,
-      "purchase_url": "",
+      "audience": "希望学习四足机器人无人巡检的大学生与机器人爱好者",
+      "prerequisites": "具备 Python 基础、Ubuntu 基本操作能力及 ROS2 节点、话题、服务与动作概念；无真机可完成核心练习，课程包含讲师端真机演示。",
+      "goals": [
+        "理解 ROS2 通信与四足机器人控制",
+        "掌握 SLAM 建图与 Nav2 导航",
+        "编排无人巡检任务"
+      ],
+      "goal_keywords": [
+        "四足机器人",
+        "机器狗",
+        "ROS2",
+        "SLAM",
+        "Nav2",
+        "无人巡检"
+      ],
+      "requires_hardware": false,
+      "min_basis": "basic",
+      "min_weekly_hours": 3,
+      "purchase_url": "https://www.arborseek.com/course/43",
       "review_checks": {
-        "sale_status_confirmed": false,
-        "purchase_page_checked": false,
-        "course_facts_checked": false,
-        "course_content_checked": false,
-        "presale_contact_checked": false
+        "sale_status_confirmed": true,
+        "purchase_page_checked": true,
+        "course_facts_checked": true,
+        "course_content_checked": true,
+        "presale_contact_checked": true
       },
-      "reviewer": "",
-      "reviewed_at": ""
+      "reviewer": "Tianshu（本会话确认）",
+      "reviewed_at": "2026-10-12"
     },
     {
       "id": "91",
@@ -554,27 +576,38 @@
     },
     {
       "id": "99",
-      "status": "recommendable",
+      "status": "approved",
       "title": "智能机械臂抓取与操作实训营",
       "source_url": "https://www.arborseek.com/course/99",
       "source_snapshot": "data/official_course_drafts/99.json",
-      "audience": "",
-      "prerequisites": "",
-      "goals": [],
-      "goal_keywords": [],
-      "requires_hardware": null,
-      "min_basis": null,
-      "min_weekly_hours": null,
-      "purchase_url": "",
+      "audience": "机器人爱好者及自动化、计算机、电子信息、机械电子相关专业学生与技术人员",
+      "prerequisites": "具备 Python 基础、Ubuntu 基本操作及矩阵向量概念；无真机可使用 MoveIt2 / Gazebo 仿真完成核心练习。",
+      "goals": [
+        "掌握机械臂运动规划",
+        "理解视觉定位与手眼标定",
+        "编排机械臂抓取与操作流程"
+      ],
+      "goal_keywords": [
+        "机械臂",
+        "抓取",
+        "MoveIt2",
+        "视觉定位",
+        "手眼标定",
+        "ROS2"
+      ],
+      "requires_hardware": false,
+      "min_basis": "basic",
+      "min_weekly_hours": 3,
+      "purchase_url": "https://www.arborseek.com/course/99",
       "review_checks": {
-        "sale_status_confirmed": false,
-        "purchase_page_checked": false,
-        "course_facts_checked": false,
-        "course_content_checked": false,
-        "presale_contact_checked": false
+        "sale_status_confirmed": true,
+        "purchase_page_checked": true,
+        "course_facts_checked": true,
+        "course_content_checked": true,
+        "presale_contact_checked": true
       },
-      "reviewer": "",
-      "reviewed_at": ""
+      "reviewer": "Tianshu（本会话确认）",
+      "reviewed_at": "2026-10-12"
     },
     {
       "id": "101",
