@@ -67,8 +67,26 @@ watch(open, async value => {
   if (value) { event('widget_open'); input.value?.focus({preventScroll: true}); }
   else launcher.value?.focus({preventScroll: true});
 });
+// Dock under the host site's quick-bar toggle so the launcher reads as part of that stack.
+const LAUNCH_SIZE = 42, LAUNCH_GAP = 10;
+const launchStyle = ref({});
+let anchorFrame = 0, anchorObserver;
+function anchorLauncher() {
+  cancelAnimationFrame(anchorFrame);
+  anchorFrame = requestAnimationFrame(() => {
+    const toggle = document.querySelector('.utility-button.toggle-button');
+    const rect = toggle?.getBoundingClientRect();
+    if (!rect?.width || getComputedStyle(toggle).visibility === 'hidden') { launchStyle.value = {}; return; }
+    const right = document.documentElement.clientWidth - rect.right + (rect.width - LAUNCH_SIZE) / 2;
+    const top = Math.min(rect.bottom + LAUNCH_GAP, innerHeight - LAUNCH_SIZE - 8);
+    launchStyle.value = {right: `${right}px`, top: `${top}px`, bottom: 'auto'};
+  });
+}
 onMounted(async () => {
   window.addEventListener('resize', syncScroll); event('widget_impression');
+  anchorLauncher(); window.addEventListener('resize', anchorLauncher); document.addEventListener('transitionend', anchorLauncher, true);
+  anchorObserver = new MutationObserver(anchorLauncher);
+  anchorObserver.observe(document.body, {childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style']});
   if (durable && conversationId) await restoreSession({id: conversationId});
   if (durable && props.identityRefresh && current()) await refreshHistory();
 });
@@ -82,7 +100,10 @@ function clearIdentityState() {
   historyLoading.value = false; nextHistoryOffset.value = null;
 }
 defineExpose({clearIdentityState});
-onBeforeUnmount(() => { live = false; requests.abort(); window.removeEventListener('resize', syncScroll); if (previousOverflow !== null) document.body.style.overflow = previousOverflow; });
+onBeforeUnmount(() => {
+  live = false; requests.abort(); window.removeEventListener('resize', syncScroll); if (previousOverflow !== null) document.body.style.overflow = previousOverflow;
+  cancelAnimationFrame(anchorFrame); anchorObserver?.disconnect(); window.removeEventListener('resize', anchorLauncher); document.removeEventListener('transitionend', anchorLauncher, true);
+});
 async function scrollAnswer() { await nextTick(); if (log.value) log.value.scrollTop = log.value.scrollHeight; }
 function resizeInput() { /* Ant Design Vue 的 autoSize 负责输入框高度。 */ }
 function keydown(e) {
@@ -215,8 +236,8 @@ async function purchase(item, turn) {
 <template>
  <StyleProvider :container="styleContainer">
  <AConfigProvider :theme="{token: {colorPrimary: '#1890ff', borderRadius: 10, zIndexPopupBase: 2147483010}}" :get-popup-container="getPopupContainer">
-  <AButton v-show="!open" ref="launcher" type="text" class="as-launch" :aria-expanded="open" aria-controls="arborseek-dialog" @click="open = true">
-    <span class="as-launch-mark">探</span><span>问问探界</span>
+  <AButton v-show="!open" ref="launcher" type="text" class="as-launch" :style="launchStyle" aria-label="问问探界，课程问答助手" title="问问探界 · 课程问答助手" :aria-expanded="open" aria-controls="arborseek-dialog" @click="open = true">
+    <span class="as-launch-mark" aria-hidden="true"><UiIcon name="qa-bot" /></span>
   </AButton>
   <section v-show="open" id="arborseek-dialog" class="as-panel" :class="{open}" role="dialog" aria-label="探界 · 课程助手" @keydown.esc="historyOpen ? historyOpen = false : open = false">
     <header class="as-head">

@@ -1,4 +1,6 @@
 <script setup>
+import qaBotLogo from './assets/qa-bot-logo.png';
+
 defineProps({name: String});
 const paths = {
   history: 'M3 11a9 9 0 1 1 2.7 6.4M3 4v7h7M12 7v5l3 2',
@@ -11,4 +13,12 @@ const paths = {
   delete: 'M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7',
 };
 </script>
-<template><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path :d="paths[name]" /></svg></template>
+<template>
+  <span
+    v-if="name === 'qa-bot'"
+    class="as-qa-bot"
+    :style="{WebkitMaskImage: `url(${qaBotLogo})`, maskImage: `url(${qaBotLogo})`}"
+    aria-hidden="true"
+  />
+  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path :d="paths[name]" /></svg>
+</template>
