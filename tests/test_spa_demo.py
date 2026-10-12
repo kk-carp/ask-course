@@ -1,12 +1,19 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.spa import register_frontend
+from backend import spa
 
 
-def test_internal_presales_demo_has_a_separate_entry() -> None:
+def test_internal_presales_demo_has_a_separate_entry(tmp_path, monkeypatch) -> None:
+    # A clean checkout has no dist; never depend on an earlier local build.
+    dist = tmp_path / "frontend" / "dist"
+    dist.mkdir(parents=True)
+    (dist / "admin.html").write_text("<title>课程助手管理后台</title>", encoding="utf-8")
+    (dist / "admin.js").write_text("/* admin */", encoding="utf-8")
+    (dist / "admin.css").write_text("/* styles */", encoding="utf-8")
+    monkeypatch.setattr(spa, "APP_DIR", tmp_path / "backend")
     app = FastAPI()
-    register_frontend(app)
+    spa.register_frontend(app)
     client = TestClient(app)
 
     for path in ("/admin",):
@@ -19,7 +26,7 @@ def test_internal_presales_demo_has_a_separate_entry() -> None:
 
 def test_markdown_assets_are_served_locally():
     app = FastAPI()
-    register_frontend(app)
+    spa.register_frontend(app)
     client = TestClient(app)
     for path in ("/vendor/answer-libs.js", "/answer-format.js"):
         response = client.get(path)

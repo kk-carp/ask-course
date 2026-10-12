@@ -51,7 +51,13 @@ python scripts/smoke_kernel.py
 python -m pytest tests
 ```
 
-`pytest.ini` 将测试临时数据统一放在 `.pytest_cache/tmp`，pytest 每次运行会重建该目录；不要再为每轮验证创建根目录 `.pytest-tmp-*`。不要同时运行使用同一临时目录的多个测试进程。`.pytest_cache` 与 `.ruff_cache` 是可重新生成的缓存，测试结束后可清理；它们不属于项目源码。
+`pytest.ini` 将测试临时数据统一放在 `.pytest-tmp-local`，pytest 每次运行会重建该目录。不要同时运行使用同一临时目录的多个测试进程。测试临时目录、`.pytest_cache` 与 `.ruff_cache` 是可重新生成的缓存，不属于项目源码。
+
+### 提交与推送检查
+
+按 `.github/workflows/checks.yml` 的顺序检查：先安装 `requirements-ci.txt` 中固定版本的依赖并执行 Ruff、Python 测试，再执行前端依赖安装、构建、前端测试和 `python scripts/check_frontend.py`。Python 测试必须在没有 `frontend/dist` 的干净检出中也能通过；需要构建文件的单元测试应在临时目录中自行准备，不依赖本地历史构建。构建后的检查脚本验证实际页面、脚本和样式的 HTTP 路由。
+
+`git push` 成功只表示远程收到提交。推送后还需核对该提交对应的 GitHub Actions，确认 `tests` 和 `postgres-integration` 均成功，再报告检查通过；未完成或失败时应明确说明状态。
 
 ### PostgreSQL 集成检查
 
