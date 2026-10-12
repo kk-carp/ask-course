@@ -3,10 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>天树探界 · 课程助手</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <title>探界 · 课程助手管理后台</title>
   <style>
     :root {
       --ink: #17241f;
@@ -305,91 +302,141 @@
       * { transition: none !important; }
     }
     body { background: #f7f9f6; color: #25342c; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
-    .site-nav { height: 82px; background: white; border-bottom: 1px solid #e6ebe5; display: flex; align-items: center; justify-content: space-between; padding: 0 max(28px, calc((100vw - 1120px)/2)); gap: 24px; }
-    .site-brand { display: flex; align-items: center; gap: 12px; text-decoration: none; color: #1c4936; font-size: 20px; font-weight: 700; white-space: nowrap; }
-    .site-brand span { background: #eaf2e7; width: 37px; height: 37px; display: grid; place-items: center; border-radius: 10px; font-family: "Songti SC", serif; }
-    .site-nav-links { display: flex; gap: 28px; align-items: center; } .site-nav-links a, .site-nav-links button { font-size: 13px; color: #67766a; text-decoration: none; border: 0; background: none; padding: 8px 0; }
-    .site-nav-links a:hover, .site-nav-links button:hover { color: #185a3f; }
-    .site-main { max-width: 1120px; margin: 0 auto; padding: 72px 28px 56px; }
-    .site-hero { display: grid; grid-template-columns: 1fr 300px; gap: 60px; align-items: center; padding-bottom: 60px; }
-    .site-hero h1 { margin: 0 0 22px; font-size: clamp(32px, 4vw, 48px); line-height: 1.3; font-weight: 600; letter-spacing: -1.6px; }
-    .site-hero p { max-width: 470px; margin: 0; color: #7a867c; font-size: 15px; line-height: 1.9; }
-    .site-hero button { margin-top: 26px; background: #215d43; border: 0; color: white; border-radius: 9px; padding: 12px 22px; font-size: 14px; }
-    .site-note { border-left: 1px solid #d5dfd3; padding: 6px 0 6px 28px; color: #6d7c70; font-size: 13px; line-height: 1.9; }
-    .site-note strong { display: block; color: #3d5846; font-weight: 500; margin-bottom: 10px; font-size: 16px; } .site-note p { margin: 0; }
-    .site-section-head { display: flex; justify-content: space-between; gap: 20px; align-items: baseline; margin-bottom: 24px; }
-    .site-section-head h2 { font-size: 21px; font-weight: 600; margin: 0; } .site-section-head p { font-size: 12px; color: #8a958b; margin: 0; }
-    .site-courses { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
-    .site-course { background: white; border: 1px solid #e6eae3; border-radius: 12px; overflow: hidden; }
-    .site-course-art { height: 150px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; background: #e7eee3; }
-    .site-course-art svg { width: 156px; height: 108px; stroke: #61765c; stroke-width: 1.7; fill: none; }
-    .site-course:nth-child(2) .site-course-art { background: #e9edef; } .site-course:nth-child(2) svg { stroke: #617583; }
-    .site-course:nth-child(3) .site-course-art { background: #f0ece2; } .site-course:nth-child(3) svg { stroke: #887655; }
-    .site-course-info { padding: 20px; } .site-course-info h3 { font-size: 16px; font-weight: 600; margin: 0 0 9px; } .site-course-info p { margin: 0 0 20px; font-size: 12px; line-height: 1.8; color: #859087; }
-    .site-course-info button { background: transparent; border: 0; padding: 0; color: #32634a; font-size: 13px; } .site-course-info button:hover { text-decoration: underline; }
-    .site-footer { margin-top: 38px; padding-top: 20px; border-top: 1px solid #e2e8de; color: #99a197; font-size: 11px; }
-    .internal-tools { max-width: 1120px; margin: 0 auto 90px; padding: 0 28px; } .internal-tools > summary { color: #8b958c; font-size: 12px; cursor: pointer; } .internal-tools .shell { padding: 28px 0; }
-    @media(max-width: 760px) { .site-nav { height: 68px; padding: 0 20px; } .site-brand { font-size: 17px; } .site-nav-links { gap: 18px; } .site-nav-links a:last-of-type { display: none; } .site-main { padding: 42px 20px; } .site-hero { grid-template-columns: 1fr; gap: 26px; padding-bottom: 42px; } .site-note { padding-left: 18px; } .site-courses { grid-template-columns: 1fr; } .site-course { display: grid; grid-template-columns: 104px 1fr; } .site-course-art { height: 100%; } .site-course-art svg { width: 90px; } .site-course-info { padding: 18px; } .site-course-info p { margin-bottom: 12px; } .site-section-head { display: block; } .site-section-head p { margin-top: 8px; } }
+    [hidden] { display: none !important; }
+    .shell { max-width: 1440px; padding: 28px 32px 48px; }
+    .mast { align-items: center; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+    .mast h1, .rail h2, .drawer h3, .empty strong { font-family: inherit; }
+    .mast h1 { font-size: 24px; }
+    .layout { grid-template-columns: 240px minmax(0, 1fr); gap: 28px; }
+    .rail { padding: 20px; box-shadow: none; border-radius: 12px; }
+    .admin-nav { display: grid; gap: 6px; margin-bottom: 28px; }
+    .admin-nav button { text-align: left; border: 0; border-radius: 7px; padding: 11px 12px; background: transparent; color: var(--muted); }
+    .admin-nav button[aria-current="page"] { background: var(--canopy); color: white; font-weight: 600; }
+    .course { padding: 8px 10px; }
+    .workspace { min-width: 0; }
+    .workspace-head { margin-bottom: 22px; }
+    .workspace-head h2 { margin: 0 0 6px; font-size: 22px; }
+    .workspace-head p { margin: 0; color: var(--muted); font-size: 14px; }
+    .management-panel { background: white; border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
+    .management-panel h3 { margin: 0 0 10px; font-size: 16px; }
+    #upload-form { padding: 18px; background: #f4f8f2; border-radius: 8px; margin-bottom: 24px; }
+    #upload-form label { display: block; margin: 8px 0 4px; font-size: 13px; }
+    #upload-form select { padding: 8px; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; }
+    .document-card { padding: 20px 0; }
+    .document-card strong { font-size: 15px; color: var(--ink); }
+    .document-card .row-actions { gap: 12px; }
+    .stage { box-shadow: none; min-height: 540px; }
+    .access-notice { padding: 28px; border: 1px dashed var(--line); background: white; border-radius: 12px; color: var(--muted); }
+    #admin-err { padding: 12px; background: #fbeee8; border-radius: 8px; }
+    @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } .shell { padding: 20px; } .admin-nav { grid-template-columns: repeat(3, 1fr); } }
+    .login-view { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+    .login-card { width: min(100%, 420px); background: white; border: 1px solid var(--line); border-radius: 14px; padding: 36px; }
+    .login-card h1 { font-size: 23px; margin: 24px 0 8px; }
+    .login-card label { display: block; margin: 18px 0 6px; font-size: 14px; }
+    .login-card input, #course-search, .document-filters input, .document-filters select { width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 7px; background: white; }
+    .login-card .send { width: 100%; margin-top: 24px; }
+    .password-field { display: flex; gap: 8px; }
+    .password-field input { min-width: 0; }
+    .password-field button { border: 0; background: transparent; color: var(--canopy); white-space: nowrap; }
+    .account-header { display: grid; gap: 10px; justify-items: end; }
+    .account-actions { display: flex; gap: 12px; align-items: center; font-size: 13px; color: var(--muted); }
+    .course-list { max-height: 52vh; overflow: auto; margin-top: 14px; }
+    #refresh-courses { margin-top: 8px; }
+    .context-label { font-size: 13px; font-weight: 400; color: var(--muted); margin-left: 10px; }
+    .document-counts { padding: 12px 0; font-size: 14px; color: var(--canopy); }
+    .document-filters { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; }
+    .document-filters label { display: grid; gap: 6px; font-size: 13px; }
+    .document-filters label:first-child { flex: 1; min-width: 160px; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible { outline: 2px solid var(--moss); outline-offset: 3px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    @media (max-width: 860px) { .account-header { justify-items: start; } .account-actions { flex-wrap: wrap; } .course-list { max-height: 240px; } }
   </style>
 </head>
 <body>
-  <details class="internal-tools" id="internal-tools" open><summary>内部调试与资料管理</summary>
-  <div class="shell">
+  <section id="login-view" class="login-view" aria-label="后台登录">
+    <div class="login-card">
+      <div class="mark" aria-hidden="true">探</div>
+      <h1>课程助手管理后台</h1>
+      <p class="hint">登录后维护课程资料、检查告警和测试回答。</p>
+      <p id="login-status" class="hint" role="status">正在确认登录状态…</p>
+      <form id="login-form" hidden>
+        <label for="username">管理员账号</label>
+        <input id="username" name="username" autocomplete="username" required />
+        <label for="password">密码</label>
+        <div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" required />
+          <button type="button" id="toggle-password" aria-controls="password" aria-pressed="false">显示</button></div>
+        <p class="err" id="login-error" role="alert" hidden></p>
+        <button type="submit" id="login-submit" class="send">登录后台</button>
+      </form>
+    </div>
+  </section>
+  <div class="shell" id="admin-shell" hidden>
     <header class="mast">
       <div class="mark" aria-hidden="true">探</div>
       <div>
-        <h1>售前助手内部演示</h1>
-        <p>P0 只验证一件事：常规课咨能否在站内答上，答不上就转给对应售前。</p>
+        <h1>课程助手管理后台</h1>
+        <p>维护课程资料、检查运行告警，并验证对外回答。</p>
       </div>
-      <div class="health" id="health" aria-live="polite"></div>
+      <div class="account-header"><div class="health" id="health" aria-live="polite"></div>
+        <div class="account-actions"><span id="who"></span><button class="ghost" id="logout" type="button">退出登录</button></div></div>
     </header>
 
     <div class="layout">
       <aside class="rail">
-        <h2>当前课程</h2>
-        <div class="course-list" id="courses"></div>
-        <p class="hint">选课会把 <code>course_id</code> 带给接口，未命中时按课程精确转人工。游客提问无需登录。</p>
+        <nav class="admin-nav" aria-label="后台导航">
+          <button type="button" data-view="documents" aria-current="page">课程资料</button>
+          <button type="button" data-view="operations">运行告警</button>
+          <button type="button" data-view="debug">问答调试</button>
+        </nav>
+        <section id="course-selector" aria-label="选择课程">
+          <h2>课程范围</h2>
+          <label class="sr-only" for="course-search">搜索课程名称或编号</label>
+          <input id="course-search" type="search" placeholder="搜索名称或编号" autocomplete="off" />
+          <p id="catalog-status" class="hint" role="status"></p>
+          <button type="button" class="ghost" id="refresh-courses">刷新课程列表</button>
+          <div class="course-list" id="courses"></div>
+          <p class="hint">管理目录包含未开放课程。上传前请选择具体课程。</p>
+        </section>
+      </aside>
 
-        <div class="drawer">
-          <h3>内部维护</h3>
-          <p class="hint" id="who">游客态 · 可提问，不能灌库</p>
-          <form id="login-form">
-            <label for="username">账号</label>
-            <input id="username" name="username" value="p0_admin" autocomplete="username" />
-            <label for="password">密码</label>
-            <input id="password" name="password" type="password" autocomplete="current-password" />
-            <div class="row-actions">
-              <button class="ghost" type="submit">登录</button>
-              <button class="ghost" id="logout" type="button">退出</button>
-            </div>
-          </form>
+      <main class="workspace">
+        <header class="workspace-head"><h2 id="view-title">课程资料</h2><p id="view-description">上传、审核和发布课程资料，撤回不再使用的内容。</p></header>
+        <p class="err" id="admin-err" role="alert" hidden></p>
+        <p id="access-notice" class="access-notice">请先在左侧登录管理员账号，登录后可维护课程资料和查看运行告警。</p>
+        <section id="documents-view" class="management-panel" aria-labelledby="view-title" hidden>
+          <h3>上传资料 <span class="context-label" id="upload-context">请选择具体课程</span></h3>
           <form id="upload-form" hidden>
             <label for="replacement-target">资料用途</label>
             <select id="replacement-target"><option value="">新增独立资料</option></select>
             <label for="file">上传课程文本（md / txt / pdf / docx / pptx）</label>
-            <input id="file" name="file" type="file" accept=".md,.txt,.pdf,.docx,.pptx,text/markdown,text/plain" />
+            <input id="file" name="file" type="file" required accept=".md,.txt,.pdf,.docx,.pptx,text/markdown,text/plain" />
             <div class="row-actions">
               <button class="ghost" type="submit">上传待审核资料</button>
             </div>
           </form>
           <section id="document-tools" hidden aria-label="课程资料管理">
+            <div id="document-counts" class="document-counts" aria-live="polite"></div>
+            <div class="document-filters">
+              <label for="document-search">查找资料<input id="document-search" type="search" placeholder="输入资料名称" /></label>
+              <label for="document-status">资料状态<select id="document-status"><option value="">全部状态</option><option value="pending">待审核</option><option value="ready">已发布</option><option value="offline">已撤回</option><option value="failed">入库失败</option><option value="processing">处理中</option></select></label>
+            </div>
             <p class="hint">上传后先待审核，不参与回答。请下载核对原文，再填写审核依据并发布。上传新版时选择要替换的资料，审核发布前旧版保持可用。撤回后不能重新发布；永久删除前须先撤回。</p>
             <div class="docs" id="docs" aria-live="polite"></div>
           </section>
+        </section>
+        <section id="operations-view" class="management-panel" aria-labelledby="view-title" hidden>
           <section id="operations-tools" hidden aria-label="运行告警">
             <h3>运行告警</h3>
             <button type="button" class="ghost" id="refresh-alerts">查看最新告警</button>
             <p id="operations-status" class="hint" aria-live="polite" style="white-space:pre-wrap">点击查看采集器状态和费用估算。</p>
           </section>
-          <p class="err" id="admin-err" hidden></p>
-        </div>
-      </aside>
-
-      <section class="stage">
+        </section>
+      <section class="stage" id="debug-view" aria-labelledby="view-title" hidden>
         <div class="log" id="log">
           <div class="empty">
-            <strong>还没有问过</strong>
-            选一门课，用下面的例句，或直接输入学员常问的基础、适用人群、课时问题。知识库为空时会走到转人工，这也是 P0 要看的路径。
+            <strong>测试课程回答</strong>
+            在左侧选择课程，再输入学员问题，检查回答内容、资料依据和顾问联系方式。
           </div>
         </div>
         <div class="prompts" id="prompts"></div>
@@ -398,26 +445,28 @@
           <button class="send" type="submit" id="send">提问</button>
         </form>
       </section>
+      </main>
     </div>
   </div>
-  </details>
 
   <script src="./vendor/answer-libs.js"></script>
   <script src="./answer-format.js"></script>
   <script src="./admin-documents.js"></script>
   <script>
-    const COURSES = [
-      { id: "", name: "未指定课程", sub: "按官网课程列表自动匹配" },
-      { id: "42", name: "课程 42", sub: "运营资料待确认" },
-      { id: "43", name: "课程 43", sub: "运营资料待确认" },
-      { id: "99", name: "课程 99", sub: "运营资料待确认" },
-    ];
-
-    const state = { courseId: "", conversationId: null, asking: false, me: null };
+    const state = { courseId: "", conversationId: null, asking: false, uploading: false, me: null, view: "documents", courses: [], catalogRequest: 0, authRevision: 0, controller: null };
     const $ = (id) => document.getElementById(id);
     const documentManager = createDocumentManager({
       root: $("docs"), getUser: () => state.me, getCourseId: () => state.courseId,
       showError: message => showAdminErr(message),
+      getFilters: () => ({query: $("document-search").value, status: $("document-status").value}),
+      onUnauthorized: () => expireSession(),
+      onItems: items => {
+        const courseItems = items.filter(item => !state.courseId || item.course_id === state.courseId);
+        const count = status => courseItems.filter(item => item.status === status).length;
+        $("document-counts").textContent = `共 ${courseItems.length} 份资料 · 待审核 ${count('pending')} · 已发布 ${count('ready')} · 已撤回 ${count('offline')}`;
+        for (const course of state.courses) course.document_count = items.filter(item => item.course_id === course.id).length;
+        renderCourses();
+      },
     });
 
     function escapeHtml(text) {
@@ -446,13 +495,39 @@
     }
 
     function renderCourses() {
-      $("courses").innerHTML = COURSES.map((item) => `
-        <button type="button" class="course" data-id="${item.id}" aria-pressed="${item.id === state.courseId}">
-          ${escapeHtml(item.name)}
-          <small>${escapeHtml(item.sub)}</small>
-        </button>
-      `).join("");
+      const query = $("course-search").value.trim().toLowerCase();
+      const courses = state.courses.filter(item => `${item.title} ${item.id}`.toLowerCase().includes(query));
+      const all = {id:"", title:state.view === "debug" ? "自动匹配课程" : "全部课程", document_count:null};
+      $("courses").innerHTML = [all, ...courses].map(item => `
+        <button type="button" class="course" data-id="${escapeHtml(item.id)}" aria-pressed="${item.id === state.courseId}" ${state.asking || state.uploading ? 'disabled' : ''}>
+          ${escapeHtml(item.title)}<small>${item.id ? `编号 ${escapeHtml(item.id)} · ${item.document_count} 份资料` : '不限定课程'}</small>
+        </button>`).join("") + (query && !courses.length ? '<p class="hint">没有匹配的课程，请更换名称或编号。</p>' : '');
+      const selected = state.courses.find(item => item.id === state.courseId);
+      $("upload-context").textContent = selected?.title || "请选择具体课程";
+      $("upload-form").querySelector('button[type="submit"]').disabled = !state.courseId || state.uploading;
     }
+    async function refreshCourses() {
+      if (!state.me?.can_manage_documents) return;
+      const owner = state.me, revision = ++state.catalogRequest;
+      $("catalog-status").textContent = "正在读取课程…";
+      $("refresh-courses").disabled = true;
+      try {
+        const response = await adminFetch("/admin/courses", {credentials:"include", cache:"no-store"});
+        if (!response.ok) throw new Error("课程列表加载失败，请重试。");
+        const courses = await response.json();
+        if (owner !== state.me || revision !== state.catalogRequest) return;
+        state.courses = courses;
+        if (!courses.some(item => item.id === state.courseId)) state.courseId = "";
+        $("catalog-status").textContent = courses.length ? `已登记或有资料的课程：${courses.length} 门` : "暂无已登记课程，请先由运营登记课程。";
+        renderCourses(); documentManager.render();
+      } catch (error) {
+        if (owner === state.me && revision === state.catalogRequest) $("catalog-status").textContent = error.message || "课程列表加载失败，请重试。";
+      } finally { if (revision === state.catalogRequest) $("refresh-courses").disabled = false; }
+    }
+    $("course-search").addEventListener("input", renderCourses);
+    $("refresh-courses").addEventListener("click", refreshCourses);
+    $("document-search").addEventListener("input", () => documentManager.render());
+    $("document-status").addEventListener("change", () => documentManager.render());
 
     const DEFAULT_PROMPTS = [
       "推荐一门适合我的课程",
@@ -479,17 +554,54 @@
       ].join("");
     }
 
+    const views = {
+      documents: ["课程资料", "上传、审核和发布课程资料，撤回不再使用的内容。"],
+      operations: ["运行告警", "检查接口、模型和费用告警，发现问题后及时处理。"],
+      debug: ["问答调试", "模拟学员咨询，核对回答及引用资料。"],
+    };
+    function renderView() {
+      const canManage = Boolean(state.me?.can_manage_documents);
+      $("course-selector").hidden = state.view === "operations" || !canManage;
+      const allowed = state.view === "debug" ? Boolean(state.me) : canManage;
+      $("view-title").textContent = views[state.view][0];
+      $("view-description").textContent = views[state.view][1];
+      for (const name of Object.keys(views)) $(name === "debug" ? "debug-view" : `${name}-view`).hidden = !allowed || name !== state.view;
+      document.querySelectorAll("[data-view]").forEach(button => {
+        if (button.dataset.view === state.view) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+      });
+      renderCourses();
+      $("access-notice").hidden = allowed;
+      $("access-notice").textContent = state.me ? "当前账号没有资料管理权限，请联系管理员。" : "请先在左侧登录内部账号，登录后可使用对应的后台功能。";
+    }
+    document.querySelector(".admin-nav").addEventListener("click", event => {
+      const button = event.target.closest("button[data-view]");
+      if (!button) return;
+      state.view = button.dataset.view;
+      showAdminErr("");
+      renderView();
+    });
+
     function setWho() {
       const canManage = Boolean(state.me?.can_manage_documents);
+      $("login-view").hidden = Boolean(state.me);
+      $("admin-shell").hidden = !state.me;
+      $("login-form").hidden = Boolean(state.me);
+      $("login-status").textContent = "请使用内部账号登录。";
+      $("password").value = "";
+      $("password").type = "password";
+      $("toggle-password").textContent = "显示";
+      $("toggle-password").setAttribute("aria-pressed", "false");
       $("upload-form").hidden = !canManage;
       $("document-tools").hidden = !canManage;
       $("operations-tools").hidden = !canManage;
       $("operations-status").textContent = "点击查看采集器状态和费用估算。";
       documentManager.clear();
+      renderView();
       if (state.me) {
         $("who").textContent = `已登录 ${state.me.username} · ${canManage ? "可维护课程资料" : "无资料管理权限"}`;
       } else {
-        $("who").textContent = "游客态 · 可提问，不能灌库";
+        $("who").textContent = "请登录内部账号";
       }
     }
 
@@ -610,8 +722,11 @@
     }
 
     async function ask(question) {
-      if (state.asking) return;
+      if (state.asking || !state.me) return;
       state.asking = true;
+      renderCourses();
+      const owner = state.me;
+      const controller = state.controller = new AbortController();
       $("send").disabled = true;
       const wrap = appendTurn(question);
       const body = {
@@ -624,7 +739,8 @@
       let latest = { hit: null, sources: [], owner: null };
       const parts = [];
       try {
-        const res = await fetch("/ask/stream", {
+        const res = await adminFetch("/ask/stream", {
+          signal: controller.signal,
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
@@ -635,6 +751,7 @@
           throw new Error(detail.detail || `提问失败（${res.status}）`);
         }
         await readSse(res, (name, data) => {
+          if (state.me !== owner || controller.signal.aborted) return;
           if (name === "progress") wrap.querySelector(".a").textContent = data.message;
           if (name === "part") {
             parts[data.index - 1] = `${data.index}. ${data.question}\n${data.answer}`;
@@ -652,11 +769,15 @@
         });
         if (["upstream_error", "service_unavailable"].includes(latest.error_type)) appendRetry(wrap, question);
       } catch (err) {
+        if (state.me !== owner || controller.signal.aborted) return;
         wrap.querySelector(".a").textContent = err.message || "提问失败";
         appendRetry(wrap, question);
       } finally {
+        if (state.controller !== controller) return;
+        state.controller = null;
         state.asking = false;
         $("send").disabled = false;
+        renderCourses();
       }
     }
 
@@ -671,13 +792,16 @@
 
     async function refreshMe() {
       try {
+        const revision = state.authRevision;
         const res = await fetch("/me", { credentials: "include" });
-        state.me = res.ok ? await res.json() : null;
+        const me = res.ok ? await res.json() : null;
+        if (revision !== state.authRevision) return;
+        state.me = me;
       } catch (_) {
         state.me = null;
       }
       setWho();
-      if (state.me?.can_manage_documents) refreshDocs();
+      if (state.me?.can_manage_documents) { refreshDocs(); refreshCourses(); }
     }
 
     async function refreshDocs() {
@@ -696,7 +820,7 @@
         model_usage_missing_cost_incomplete:"模型未返回完整用量，费用可能漏计",
         daily_cost_budget:"已达到当日费用预算", process_restarted_sampling_gap:"服务重启，用量可能存在采样缺口"};
       try {
-        const response = await fetch("/metrics/alerts", {credentials:"include", cache:"no-store"});
+        const response = await adminFetch("/metrics/alerts", {credentials:"include", cache:"no-store"});
         if (!response.ok) throw new Error("暂时无法读取告警，请检查登录状态和服务。");
         const data = await response.json();
         if (state.me !== owner) return;
@@ -714,7 +838,11 @@
 
     $("courses").addEventListener("click", (event) => {
       const btn = event.target.closest(".course");
-      if (!btn) return;
+      if (!btn || state.asking || state.uploading) return;
+      if (state.courseId !== btn.dataset.id) {
+        state.conversationId = null;
+        $("log").replaceChildren();
+      }
       state.courseId = btn.dataset.id;
       renderCourses();
       renderPrompts();
@@ -759,34 +887,64 @@
       $("question").value = "";
       ask(question);
     });
-    $("login-form").addEventListener("submit", async (event) => {
+    function clearIdentity() {
+      state.authRevision += 1;
+      state.catalogRequest += 1;
+      state.controller?.abort(); state.controller = null;
+      state.asking = false; state.uploading = false; $("send").disabled = false;
+      state.me = null; state.courseId = ""; state.conversationId = null; state.courses = [];
+      state.view = "documents";
+      $("course-search").value = ""; $("document-search").value = ""; $("document-status").value = "";
+      $("catalog-status").textContent = ""; $("refresh-courses").disabled = false;
+      $("log").replaceChildren(); $("question").value = ""; $("file").value = "";
+      $("document-counts").textContent = "";
+      setWho(); showAdminErr(""); renderCourses();
+    }
+    function loginError(message) {
+      $("login-error").hidden = !message; $("login-error").textContent = message || "";
+    }
+    function expireSession() { clearIdentity(); loginError("登录已过期，请重新登录。"); }
+    async function adminFetch(url, options) {
+      const revision = state.authRevision;
+      const response = await fetch(url, options);
+      if (response.status === 401 && revision === state.authRevision) expireSession();
+      return response;
+    }
+    $("toggle-password").addEventListener("click", () => {
+      const visible = $("password").type === "password";
+      $("password").type = visible ? "text" : "password";
+      $("toggle-password").textContent = visible ? "隐藏" : "显示";
+      $("toggle-password").setAttribute("aria-pressed", String(visible));
+    });
+    $("login-form").addEventListener("submit", async event => {
       event.preventDefault();
-      showAdminErr("");
-      const res = await fetch("/login", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: $("username").value,
-          password: $("password").value,
-        }),
-      });
-      if (!res.ok) {
-        showAdminErr("登录失败，请确认账号密码。");
-        return;
-      }
-      state.me = await res.json();
-      setWho();
-      refreshDocs();
+      const button = $("login-submit");
+      if (button.disabled) return;
+      button.disabled = true; button.textContent = "正在登录…"; loginError("");
+      const revision = state.authRevision;
+      try {
+        const response = await fetch("/login", {method:"POST", credentials:"include",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({username:$("username").value.trim(), password:$("password").value})});
+        if (!response.ok) throw new Error(response.status === 401 ? "账号或密码错误，请重新输入。" : response.status === 429 ? "登录尝试过于频繁，请稍后重试。" : "暂时无法登录，请稍后重试。");
+        const me = await response.json();
+        if (revision !== state.authRevision) return;
+        clearIdentity(); state.me = me; setWho();
+        if (state.me.can_manage_documents) { refreshDocs(); refreshCourses(); }
+      } catch (error) {
+        if (revision === state.authRevision) loginError(error.message || "无法连接服务，请检查网络后重试。");
+      } finally { button.disabled = false; button.textContent = "登录后台"; }
     });
     $("logout").addEventListener("click", async () => {
+      const button = $("logout");
+      if (button.disabled) return;
+      button.disabled = true;
       try {
-        const res = await fetch("/logout", { method: "POST", credentials: "include" });
-        if (!res.ok) throw new Error("退出失败，请重试。");
-        state.me = null;
-        setWho();
-        showAdminErr("");
+        const response = await fetch("/logout", {method:"POST", credentials:"include"});
+        if (!response.ok) throw new Error("退出失败，请重试。");
+        clearIdentity(); loginError("");
       } catch (error) { showAdminErr(error.message || "退出失败，请重试。"); }
+      finally { button.disabled = false; }
     });
     $("upload-form").addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -795,6 +953,8 @@
       await ingestFile(file);
     });
     async function ingestFile(file, replace = false) {
+      const owner = state.me;
+      if (!owner?.can_manage_documents) return;
       showAdminErr("");
       if (!state.courseId) { showAdminErr("请先选择要上传资料的课程 ID。"); return; }
       const data = new FormData();
@@ -805,18 +965,21 @@
       if (replace) data.append("replace", "true");
       const submit = $("upload-form").querySelector('button[type="submit"]');
       if (submit.disabled) return;
+      state.uploading = true;
+      renderCourses();
       submit.disabled = true;
       try {
-        const res = await fetch("/documents", { method: "POST", credentials: "include", body: data });
+        const res = await adminFetch("/documents", { method: "POST", credentials: "include", body: data });
         if (!res.ok) {
           const detail = await res.json().catch(() => ({}));
           throw new Error(typeof detail.detail === "string" ? detail.detail :
             (res.status === 409 ? "同内容资料已存在，请查看列表；当前上传不会替换其他内容。" : "入库失败"));
         }
+        if (state.me !== owner) return;
         $("file").value = "";
-        await refreshDocs();
-      } catch (error) { showAdminErr(error.message || "上传失败，请重试。"); }
-      finally { submit.disabled = false; }
+        await refreshDocs(); refreshCourses();
+      } catch (error) { if (state.me === owner) showAdminErr(error.message || "上传失败，请重试。"); }
+      finally { if (state.me === owner) { state.uploading = false; submit.disabled = !state.courseId; renderCourses(); } }
     }
 
     renderCourses();

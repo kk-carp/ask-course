@@ -104,7 +104,7 @@ class Settings(BaseSettings):
     handoff_fallback_name: str = ""
     # 未命中文案（与"系统故障"必须区分）
     handoff_miss_answer: str = (
-        "这个问题我暂时没有可靠依据回答，已为你转接对应课程顾问。"
+        "这个问题暂时无法根据现有课程资料确认，请通过下方联系方式联系课程顾问。"
     )
     # 官网课程详情。未命中时按数字课程 ID 读取 pre_sale_service_qrcode；留空则不请求。
     course_detail_url: str = "https://arboradmin.saikr.com/miniapp/course/detail"

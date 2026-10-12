@@ -210,10 +210,6 @@ async function purchase(item, turn) {
     location.assign(url);
   } catch (cause) { if (failure(cause)) turn.actionError = cause.message; }
 }
-async function copySummary(turn) {
-  try { await navigator.clipboard.writeText(turn.result.handoff_summary); turn.copyStatus = '已复制'; }
-  catch { turn.copyStatus = '复制失败，请手动选择摘要'; }
-}
 </script>
 
 <template>
@@ -282,7 +278,6 @@ async function copySummary(turn) {
               <p v-else>联系方式暂不可用，请稍后重试。</p>
             </template>
             <p v-else>联系方式暂不可用，请稍后重试。</p>
-            <template v-if="turn.result.handoff_summary"><AButton @click="copySummary(turn)">{{ turn.copyStatus || '复制咨询摘要' }}</AButton><pre>{{ turn.result.handoff_summary }}</pre></template>
           </div>
           <details v-if="turn.result.sources?.length || evidence(turn).length" class="as-evidence">
             <summary>查看回答依据</summary>

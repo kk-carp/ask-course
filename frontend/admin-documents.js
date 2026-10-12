@@ -1,6 +1,6 @@
 /* Internal document maintenance. API permissions remain authoritative. */
 (function () {
-  window.createDocumentManager = function ({root, getUser, getCourseId, showError}) {
+  window.createDocumentManager = function ({root, getUser, getCourseId, showError, getFilters = () => ({}), onItems = () => {}, onUnauthorized = () => {}}) {
     let items = [];
     let generation = 0;
     let busy = false;
@@ -13,11 +13,14 @@
     function render() {
       if (!allowed()) { root.replaceChildren(); return; }
       const course = getCourseId();
-      const visible = items.filter(item => !course || item.course_id === course);
+      const {query = '', status = ''} = getFilters();
+      const courseItems = items.filter(item => !course || item.course_id === course);
+      const visible = courseItems.filter(item => (!status || item.status === status) && item.title.toLowerCase().includes(query.trim().toLowerCase()));
+      onItems(items);
       const target = document.getElementById('replacement-target');
       if (target) {
         const selected = target.value;
-        target.innerHTML = '<option value="">新增独立资料</option>' + visible.filter(item => item.status === 'ready' && item.course_id === course)
+        target.innerHTML = '<option value="">新增独立资料</option>' + courseItems.filter(item => item.status === 'ready' && item.course_id === course)
           .map(item => `<option value="${escape(item.id)}">替换：${escape(item.title)}</option>`).join('');
         target.value = [...target.options].some(option => option.value === selected) ? selected : '';
       }
@@ -37,7 +40,7 @@
             ${item.status === 'offline'
               ? `<button type="button" class="danger" data-action="delete" data-id="${escape(item.id)}" ${busy ? 'disabled' : ''}>永久删除</button>`
               : `<button type="button" class="ghost" data-action="offline" data-id="${escape(item.id)}" ${busy ? 'disabled' : ''}>撤回</button>`}
-          </div></article>`).join('') + (visible.length ? '' : '<p>暂无资料。</p>');
+          </div></article>`).join('') + (visible.length ? '' : `<p>${query || status ? '没有符合筛选条件的资料，请调整筛选条件。' : '暂无资料，请选择具体课程后上传。'}</p>`);
     }
 
     function clear() {
@@ -49,7 +52,9 @@
     }
 
     async function request(url, options) {
+      const current = generation;
       const response = await fetch(url, {credentials: 'include', ...options});
+      if (response.status === 401 && current === generation) onUnauthorized();
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(typeof body.detail === 'string' ? body.detail : `资料操作失败（${response.status}）`);

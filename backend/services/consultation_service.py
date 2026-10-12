@@ -8,20 +8,21 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.models import VisitorConsultation
 from backend.domain.website_owner import WebsiteOwner, as_owner
-from backend.services.consultation_access import active_filter, load_owned
+from backend.models import VisitorConsultation
 from backend.services.approved_courses import (
     basis_level,
     load_approved_courses,
     load_recommendable_courses,
 )
+from backend.services.consultation_access import active_filter, load_owned
 from backend.services.course_catalog_service import (
     expand_course_query,
     search_related_courses,
 )
 from backend.services.course_scope import permits
 from backend.services.handoff_service import resolve_handoff
+from backend.services.handoff_summary import build_handoff_summary
 from backend.services.project_guidance import (
     is_project_goal,
     project_guidance,
@@ -271,23 +272,9 @@ def present(session: Session, row: VisitorConsultation) -> dict:
         owner = resolved.owner.model_dump(mode="json")
     summary = None
     if status == "handoff":
-        basis_label = {"none": "零基础", "basic": "有基础", "experienced": "有项目经验"}.get(
-            profile.get("basis"), "未填写"
-        )
-        hardware_label = {"yes": "有", "no": "没有", "unknown": "暂不确定"}.get(
-            profile.get("hardware"), "未填写"
-        )
-        weekly_hours = profile.get("weekly_hours")
-        summary = "\n".join(
-            [
-                "课程咨询摘要",
-                f"当前课程：{row.course_id or '尚未选择'}",
-                f"学习目标：{profile.get('goal', '未填写')}",
-                f"现有基础：{basis_label}",
-                f"练习硬件：{hardware_label}",
-                f"每周投入：{weekly_hours} 小时" if weekly_hours is not None else "每周投入：未填写",
-                f"项目完成期限：{profile.get('deadline', '未填写')}",
-            ]
+        summary = build_handoff_summary(
+            profile=profile, course_id=row.course_id, candidates=[],
+            question=profile.get("goal", ""),
         )
     return {
         "id": row.id,

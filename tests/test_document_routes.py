@@ -26,6 +26,7 @@ def document_app():
 @pytest.mark.parametrize("role, expected", [(None, 401), ("teaching", 403), ("student", 403)])
 @pytest.mark.parametrize("method, url, payload", [
     ("GET", "/documents", {}),
+    ("GET", "/admin/courses", {}),
     ("GET", "/documents/one/inspection", {}),
     ("POST", "/documents", {"data": {"space": "courses"}, "files": {"file": ("course.md", b"text")}}),
     ("POST", "/documents/one/offline", {}),
@@ -42,7 +43,7 @@ def test_document_maintenance_requires_admin(monkeypatch, role, expected, method
     def unexpected(*_args, **_kwargs):
         pytest.fail("Unauthorized request reached document storage")
 
-    for name in ("list_documents", "ingest_document", "set_document_offline", "delete_offline_document",
+    for name in ("list_admin_courses", "list_documents", "ingest_document", "set_document_offline", "delete_offline_document",
                  "set_documents_offline", "delete_offline_documents", "publish_document", "inspect_document"):
         monkeypatch.setattr(documents, name, unexpected)
     response = TestClient(document_app()).request(method, url, **payload)

@@ -7,7 +7,7 @@ const tick = () => new Promise(resolve => setTimeout(resolve, 20));
 const root = path.resolve(__dirname, '..');
 const json = (body, status=200) => new Response(JSON.stringify(body), {status});
 
-async function mount(t, handler) {
+async function mount(t, handler, user = {username:'maintainer', can_manage_documents:true}, catalogHandler) {
   // Use delivered artifacts so missing script copies and page wiring are caught.
   const dom = new JSDOM(fs.readFileSync(path.join(root, 'dist/admin.html'), 'utf8'),
     {url:'https://agent.test/admin', runScripts:'outside-only'});
@@ -18,8 +18,12 @@ async function mount(t, handler) {
     calls.push({url, options});
     assert.equal(options.credentials, 'include');
     if (url === '/health') return json({});
-    if (url === '/me') return json({username:'maintainer', can_manage_documents:true});
+    if (url === '/me') return json(user, user ? 200 : 401);
     if (url === '/logout') return json({});
+    if (url === '/admin/courses') return catalogHandler ? catalogHandler() : json([
+      {id:'42', title:'课程42名称', document_count:0}, {id:'43', title:'课程43名称', document_count:0},
+      {id:'101', title:'新增机器人课程', document_count:0},
+    ]);
     return handler(url, options);
   };
   for (const file of ['answer-format.js', 'admin-documents.js']) {
@@ -29,6 +33,126 @@ async function mount(t, handler) {
   await tick();
   return {win, calls, doc:win.document};
 }
+
+test('admin opens document management, separates alerts and debugging, and hides panels after logout', async t => {
+  const {doc} = await mount(t, url => {
+    if (url === '/documents') return json([]);
+    throw new Error('Unexpected request '+url);
+  });
+  assert.equal(doc.getElementById('documents-view').hidden, false);
+  assert.equal(doc.getElementById('debug-view').hidden, true);
+  doc.querySelector('[data-view="operations"]').click();
+  assert.equal(doc.getElementById('operations-view').hidden, false);
+  assert.equal(doc.getElementById('documents-view').hidden, true);
+  doc.querySelector('[data-view="debug"]').click();
+  assert.equal(doc.getElementById('debug-view').hidden, false);
+  assert.equal(doc.getElementById('operations-view').hidden, true);
+  doc.getElementById('logout').click(); await tick();
+  for (const id of ['documents-view', 'operations-view', 'debug-view']) assert.equal(doc.getElementById(id).hidden, true);
+  assert.equal(doc.getElementById('access-notice').hidden, false);
+});
+
+test('visitors cannot reveal management or debugging panels by changing navigation', async t => {
+  const {doc, calls} = await mount(t, url => {throw new Error('Unexpected request '+url);}, null);
+  for (const view of ['documents', 'operations', 'debug']) {
+    doc.querySelector(`[data-view="${view}"]`).click();
+    assert.equal(doc.getElementById(`${view}-view`).hidden, true);
+  }
+  assert.equal(doc.getElementById('access-notice').hidden, false);
+  assert.ok(!calls.some(call => call.url === '/documents'));
+});
+
+test('login hides the form, clears the password, and logout returns to the login screen', async t => {
+  const {doc, calls, win} = await mount(t, (url, options) => {
+    if (url === '/login') {
+      assert.deepEqual(JSON.parse(options.body), {username:'operator', password:'test-only-password'});
+      return json({username:'operator', can_manage_documents:true});
+    }
+    if (url === '/documents') return json([]);
+    throw new Error('Unexpected request '+url);
+  }, null);
+  assert.equal(doc.getElementById('admin-shell').hidden, true);
+  assert.equal(doc.getElementById('login-form').hidden, false);
+  doc.getElementById('username').value = 'operator';
+  doc.getElementById('password').value = 'test-only-password';
+  doc.getElementById('toggle-password').click();
+  assert.equal(doc.getElementById('password').type, 'text');
+  doc.getElementById('toggle-password').click();
+  assert.equal(doc.getElementById('password').type, 'password');
+  doc.getElementById('login-form').dispatchEvent(new win.Event('submit', {cancelable:true}));
+  await tick();
+  assert.equal(doc.getElementById('login-view').hidden, true);
+  assert.equal(doc.getElementById('admin-shell').hidden, false);
+  assert.equal(doc.getElementById('password').value, '');
+  assert.match(doc.getElementById('who').textContent, /operator/);
+  doc.getElementById('logout').click(); await tick();
+  assert.equal(doc.getElementById('login-view').hidden, false);
+  assert.equal(doc.getElementById('admin-shell').hidden, true);
+  assert.equal(doc.getElementById('courses').querySelectorAll('[data-id]:not([data-id=""])').length, 0);
+  assert.equal(calls.filter(call => call.url === '/login').length, 1);
+});
+
+test('login network failure is visible and allows retry', async t => {
+  const {doc, win} = await mount(t, () => {throw new Error('网络连接失败');}, null);
+  doc.getElementById('login-form').dispatchEvent(new win.Event('submit', {cancelable:true}));
+  await tick();
+  assert.match(doc.getElementById('login-error').textContent, /网络连接失败/);
+  assert.equal(doc.getElementById('login-submit').disabled, false);
+  assert.equal(doc.getElementById('admin-shell').hidden, true);
+});
+
+test('dynamic courses support search, new course uploads, and document status filters', async t => {
+  const {doc, win} = await mount(t, url => {
+    if (url === '/documents') return json([
+      {id:'one', title:'机器人课程正文', course_id:'101', status:'pending', chunk_count:2},
+      {id:'two', title:'机器人参考资料', course_id:'101', status:'ready', chunk_count:2},
+    ]);
+    throw new Error('Unexpected request '+url);
+  });
+  assert.match(doc.getElementById('courses').textContent, /新增机器人课程/);
+  assert.equal(doc.getElementById('upload-form').querySelector('button[type="submit"]').disabled, true);
+  doc.getElementById('course-search').value = '101';
+  doc.getElementById('course-search').dispatchEvent(new win.Event('input'));
+  assert.equal(doc.querySelector('.course[data-id="42"]'), null);
+  doc.querySelector('.course[data-id="101"]').click();
+  assert.equal(doc.getElementById('upload-form').querySelector('button[type="submit"]').disabled, false);
+  assert.match(doc.getElementById('upload-context').textContent, /新增机器人课程/);
+  assert.match(doc.getElementById('document-counts').textContent, /共 2 份资料.*待审核 1.*已发布 1/);
+  doc.getElementById('document-status').value = 'pending';
+  doc.getElementById('document-status').dispatchEvent(new win.Event('change'));
+  assert.equal(doc.querySelectorAll('.document-card').length, 1);
+  assert.match(doc.getElementById('docs').textContent, /机器人课程正文/);
+  doc.getElementById('document-search').value = '不存在';
+  doc.getElementById('document-search').dispatchEvent(new win.Event('input'));
+  assert.equal(doc.querySelectorAll('.document-card').length, 0);
+  assert.match(doc.getElementById('docs').textContent, /没有符合筛选条件/);
+});
+
+test('expired document session returns to login without showing old material', async t => {
+  let expired = false;
+  const {doc} = await mount(t, url => {
+    if (url === '/documents') return expired ? json({detail:'未登录'}, 401) : json([{id:'one', title:'旧资料', course_id:'42', status:'ready', chunk_count:2}]);
+    throw new Error('Unexpected request '+url);
+  });
+  expired = true;
+  doc.querySelector('[data-refresh]').click(); await tick();
+  assert.equal(doc.getElementById('admin-shell').hidden, true);
+  assert.equal(doc.getElementById('login-view').hidden, false);
+  assert.doesNotMatch(doc.getElementById('docs').textContent, /旧资料/);
+  assert.match(doc.getElementById('login-error').textContent, /登录已过期/);
+});
+
+test('late course catalog cannot repopulate an account that has logged out', async t => {
+  let resolveCatalog;
+  const {doc} = await mount(t, url => {
+    if (url === '/documents') return json([]);
+    throw new Error('Unexpected request '+url);
+  }, {username:'maintainer', can_manage_documents:true}, () => new Promise(resolve => {resolveCatalog = resolve;}));
+  doc.getElementById('logout').click(); await tick();
+  resolveCatalog(json([{id:'999', title:'旧账号课程', document_count:1}])); await tick();
+  assert.equal(doc.getElementById('admin-shell').hidden, true);
+  assert.doesNotMatch(doc.getElementById('courses').textContent, /旧账号课程/);
+});
 
 test('course filtering, download, confirmation, offline then delete use the document APIs', async t => {
   let records = [

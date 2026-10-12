@@ -3,7 +3,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 
 from backend.config import settings
@@ -14,13 +14,14 @@ from backend.schemas import (
     DocumentPublishRequest,
     DocumentResponse,
 )
+from backend.services.admin_course_catalog import list_admin_courses
 from backend.services.auth_service import can_manage_documents, load_auth_context
 from backend.services.document_admin_service import (
     DocumentDeleteError,
     delete_offline_document,
     delete_offline_documents,
-    list_documents,
     inspect_document,
+    list_documents,
     publish_document,
     set_document_offline,
     set_documents_offline,
@@ -64,6 +65,18 @@ def _to_response(
         supersedes_id=supersedes_id,
         reviews=list(reviews),
     )
+
+
+@router.get("/admin/courses")
+def get_admin_courses(request: Request, response: Response) -> list[dict]:
+    """内部管理目录，包含尚未开放的已登记课程；仅管理员可读。"""
+    _require_document_manager(request)
+    try:
+        courses = list_admin_courses()
+    except ServiceUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    response.headers["Cache-Control"] = "no-store"
+    return courses
 
 
 @router.get("/documents", response_model=list[DocumentResponse])

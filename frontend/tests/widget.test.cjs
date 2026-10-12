@@ -46,6 +46,19 @@ async function send(f, text) {
   await tick();
 }
 
+test('advisor contact remains visible without exposing the internal consultation summary', async t => {
+  const result = {answer:'请联系课程顾问。', intent:'advisor', related_courses:[],
+    owner:{configured:true, name:'课程顾问', contact:'https://site.test/advisor.png'},
+    handoff_summary:'课程咨询摘要\n正在咨询课程：99\n需要顾问确认的问题：<img src=x onerror=alert(1)>'};
+  const f = await fixture({handler: () => new Response('event: final\ndata: '+JSON.stringify(result)+'\n\nevent: done\ndata: {}\n\n')});
+  t.after(() => f.dom.window.close());
+  f.shadow.querySelector('.as-launch').click(); await tick();
+  await send(f, '联系顾问');
+  await waitFor(f, 'img[alt="课程顾问二维码"]');
+  assert.match(f.shadow.textContent, /请联系课程顾问/);
+  assert.doesNotMatch(f.shadow.textContent, /课程咨询摘要|正在咨询课程：99|onerror|复制咨询摘要/);
+});
+
 test('privacy summary is visible before sending without a navigation link', async t => {
   const f = await fixture(); t.after(() => f.dom.window.close());
   f.shadow.querySelector('.as-launch').click(); await tick();
