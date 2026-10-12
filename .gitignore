@@ -2,6 +2,13 @@
 .env.*
 !.env.example
 cookies.txt
+cookies*.txt
+*.har
+*.pem
+*.key
+/data/course_owners.json
+/data/course_owners.*.json
+!/data/course_owners.example.json
 .venv/
 .uv-cache/
 .pytest_cache/

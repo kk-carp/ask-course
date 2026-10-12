@@ -8,6 +8,10 @@
 .codex
 .env*
 cookies.txt
+cookies*.txt
+**/*.har
+**/*.pem
+**/*.key
 docs
 data
 tests

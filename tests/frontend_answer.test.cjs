@@ -5,13 +5,9 @@ const path = require('node:path');
 const { test } = require('node:test');
 
 const root = path.resolve(__dirname, '..');
-const source = fs.readFileSync(path.join(root, 'frontend/admin.html'), 'utf8');
-const paint = source.slice(source.indexOf('    function paintTurn('), source.indexOf('    async function readSse('));
-const escapeHtml = text => String(text ?? '').replace(/[&<>"']/g, x => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[x]));
 
 function render(payload) {
-  const nodes = {'.meta-row': {}, '.a': {}};
-  const context = {escapeHtml};
+  const context = {};
   vm.createContext(context);
   const helper = path.join(root, 'frontend/answer-format.js');
   if (fs.existsSync(helper)) {
@@ -20,9 +16,7 @@ function render(payload) {
     context.DOMPurify = {sanitize: value => value};
     vm.runInContext(fs.readFileSync(helper, 'utf8'), context);
   }
-  vm.runInContext(paint, context);
-  context.paintTurn({querySelector: selector => nodes[selector]}, payload);
-  return nodes['.a'].innerHTML;
+  return context.AnswerFormat.markdown(payload.answer) + context.AnswerFormat.factSourceLabels(payload.fact_sources).join('\n');
 }
 
 test('answer renders Markdown rather than literal markers', () => {

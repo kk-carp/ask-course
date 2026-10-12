@@ -8,10 +8,11 @@ def frontend_app(tmp_path, monkeypatch, built=True):
     frontend = tmp_path / "frontend"
     dist = frontend / "dist"
     dist.mkdir(parents=True)
-    (frontend / "admin.html").write_text("内部管理", encoding="utf-8")
     (frontend / "answer-format.js").write_text("/* helper */", encoding="utf-8")
-    (frontend / "admin-documents.js").write_text("/* document maintenance */", encoding="utf-8")
     if built:
+        (dist / "admin.html").write_text('<link href="/admin.css"><div>内部管理</div><script src="/admin.js"></script>', encoding="utf-8")
+        (dist / "admin.js").write_text("/* Vue admin */", encoding="utf-8")
+        (dist / "admin.css").write_text("/* admin styles */", encoding="utf-8")
         (dist / "index.html").write_text('<script src="./widget.js" data-preview="true"></script>', encoding="utf-8")
         (dist / "widget.js").write_text("/* Vue widget */", encoding="utf-8")
         (dist / "consult.html").write_text('<script src="./widget.js" data-mode="site"></script>', encoding="utf-8")
@@ -32,10 +33,12 @@ def test_public_widget_and_internal_management_have_separate_entries(tmp_path, m
         assert "内部管理" not in response.text
     assert "Vue widget" in client.get("/widget.js").text
     assert "内部管理" in client.get("/admin").text
-    helper = client.get("/admin-documents.js")
+    helper = client.get("/admin.js")
     assert helper.status_code == 200
-    assert "document maintenance" in helper.text
+    assert "Vue admin" in helper.text
     assert helper.headers["cache-control"] == "no-store"
+    assert "admin styles" in client.get("/admin.css").text
+    assert client.get("/admin-documents.js").status_code == 404
     assert client.get("/src/main.js").status_code == 404
     standalone = client.get("/consult")
     assert standalone.status_code == 200
@@ -45,12 +48,13 @@ def test_public_widget_and_internal_management_have_separate_entries(tmp_path, m
     assert standalone.headers["cache-control"] == "no-store"
 
 
-def test_missing_build_returns_actionable_error_and_keeps_admin_available(tmp_path, monkeypatch):
+def test_missing_build_returns_actionable_error_for_both_entries(tmp_path, monkeypatch):
     client = frontend_app(tmp_path, monkeypatch, built=False)
     response = client.get("/")
     assert response.status_code == 503
     assert "npm run build" in response.json()["detail"]
-    assert client.get("/admin").status_code == 200
+    assert client.get("/admin").status_code == 503
+    assert "npm run build" in client.get("/admin").json()["detail"]
     standalone = client.get("/consult")
     assert standalone.status_code == 503
     assert "npm run build" in standalone.json()["detail"]

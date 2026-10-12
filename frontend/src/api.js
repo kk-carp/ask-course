@@ -11,7 +11,7 @@ export async function json(api, path, method = 'GET', payload, {signal} = {}) {
   return response.status === 204 ? null : response.json();
 }
 
-export async function streamAsk(api, payload, onPart, {signal} = {}) {
+export async function streamAsk(api, payload, onPart, {signal, onEvent} = {}) {
   const response = await fetch(api('ask/stream'), {
     method: 'POST', credentials: 'include', signal, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload),
   });
@@ -36,6 +36,7 @@ export async function streamAsk(api, payload, onPart, {signal} = {}) {
     if (name === 'part') onPart(data);
     if (name === 'final') result = data;
     if (name === 'error') throw Object.assign(new Error(data.detail || '咨询暂时不可用'), {status:data.status, discardAnswer: data.discard_answer});
+    onEvent?.(name, data);
   }
   try {
     while (true) {

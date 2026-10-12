@@ -61,7 +61,7 @@ docker exec $taskDbContainer psql -U postgres -d arborseek_restore_check -c "SEL
 
 API 故障时单独执行 `docker compose --env-file .env.deploy run --rm --no-deps api python -m backend.scripts.emergency_stop` 关闭共享入口。随后停止 API 或在网关关闭路由，才能阻断已在处理的请求；灰度开关只拒绝新请求。不要执行 `down -v`，它会删除数据库。
 
-发布前运行 `python scripts/recovery_drill.py`。2026-10-10 已验证虚构资料的数据库/文件联合恢复、全部表行数/内容哈希一致、会话与审核记录保留、停用状态保留及危险降级拒绝。报告明确 `production_tested=false`、`image_rollback_tested=false`。预发布镜像演练另行记录当前/目标镜像 ID、数据备份路径、恢复耗时、实际问答案例及签收人。
+发布前运行 `python scripts/recovery_drill.py`，验证虚构资料的数据库/文件联合恢复、全部表行数/内容哈希、会话与审核记录、停用状态保留及危险降级拒绝。该脚本不证明真实生产恢复或镜像回滚已通过，以本次生成的报告为准。预发布镜像演练另行记录当前/目标镜像 ID、数据备份路径、恢复耗时、实际问答案例及签收人。
 
 使用 `scripts/load_test.py` 在预发布测试实际模型的 1、5、10 并发；观察错误率、P50/P95、请求日志的 `duration_ms`，同时确认健康检查不被慢咨询阻塞。先据实记录容量，再确定流量比例。共享限流和多副本不在本次单副本试运行范围。
 

@@ -1,8 +1,13 @@
-"""检查内部页面内联脚本的语法；需要 Node.js。"""
-
+"""Check delivered Vue entry points and JavaScript syntax after the Vite build."""
 import subprocess
 from pathlib import Path
 
-source = (Path(__file__).resolve().parents[1] / "frontend/admin.html").read_text(encoding="utf-8")
-script = source.split("<script>")[1].split("</script>")[0]
-raise SystemExit(subprocess.run(["node", "--check"], input=script, text=True, encoding="utf-8", check=False).returncode)
+frontend = Path(__file__).resolve().parents[1] / "frontend"
+dist = frontend / "dist"
+page = (dist / "admin.html").read_text(encoding="utf-8")
+for asset in ("admin.js", "admin.css", "answer-format.js", "vendor/answer-libs.js"):
+    if not (dist / asset).is_file() or f'/{asset}"' not in page:
+        raise SystemExit(f"Missing admin asset or page reference: {asset}")
+for asset in ("admin.js", "widget.js"):
+    subprocess.run(["node", "--check", str(dist / asset)], check=True)
+print("Vue admin and widget build entries verified.")

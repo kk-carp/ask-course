@@ -47,13 +47,22 @@ def register_frontend(app: FastAPI) -> None:
     def answer_format_script() -> FileResponse:
         return FileResponse(frontend_dir / "answer-format.js", media_type="text/javascript; charset=utf-8")
 
-    @app.get("/admin", include_in_schema=False)
-    def admin_page() -> FileResponse:
-        return FileResponse(frontend_dir / "admin.html", media_type="text/html; charset=utf-8", headers=_DEMO_HEADERS)
+    @app.get("/admin", include_in_schema=False, response_model=None)
+    def admin_page() -> FileResponse | JSONResponse:
+        if not all((frontend_dir / "dist" / name).is_file() for name in ("admin.html", "admin.js", "admin.css")):
+            return JSONResponse(status_code=503, content={
+                "detail": "未找到管理后台构建产物。请在 frontend/ 执行 npm run build。",
+            })
+        return FileResponse(frontend_dir / "dist" / "admin.html", media_type="text/html; charset=utf-8", headers=_DEMO_HEADERS)
 
-    @app.get("/admin-documents.js", include_in_schema=False)
-    def admin_documents_script() -> FileResponse:
-        return FileResponse(frontend_dir / "admin-documents.js", media_type="text/javascript; charset=utf-8",
+    @app.get("/admin.js", include_in_schema=False)
+    def admin_script() -> FileResponse:
+        return FileResponse(frontend_dir / "dist" / "admin.js", media_type="text/javascript; charset=utf-8",
+                            headers={"Cache-Control": "no-store"})
+
+    @app.get("/admin.css", include_in_schema=False)
+    def admin_styles() -> FileResponse:
+        return FileResponse(frontend_dir / "dist" / "admin.css", media_type="text/css; charset=utf-8",
                             headers={"Cache-Control": "no-store"})
 
     if WIDGET_SCRIPT.is_file():

@@ -14,7 +14,8 @@
 - [frontend/src/main.js](../../frontend/src/main.js)：组件挂载与官网配置门禁，使用 Shadow DOM 隔离样式。
 - [frontend/src/api.js](../../frontend/src/api.js)：接口调用、SSE 解析和链接校验。
 - [frontend/index.html](../../frontend/index.html)：仅展示咨询入口的开发预览。
-- [frontend/admin.html](../../frontend/admin.html)：独立内部管理页，沿用原生 JavaScript，后端地址为 `/admin`，不嵌入官网。
+- [frontend/src/admin/AdminApp.vue](../../frontend/src/admin/AdminApp.vue)：Vue 3 + Ant Design Vue 独立内部后台，包含侧栏导航、课程范围、资料表格、上传审核弹窗、告警及调试页面。后端入口为 `/admin`，不嵌入官网。
+- [frontend/src/admin/useAdmin.js](../../frontend/src/admin/useAdmin.js)：后台登录、资料生命周期、权限与异步请求隔离。
 
 项目只保留售前主链路及课程资料管理，路由挂载范围以 `backend/main.py` 为准。
 
@@ -34,6 +35,8 @@ npm test
 ```
 
 FastAPI 托管 `frontend/dist`，每次修改源码后重新构建。Docker 镜像自动进行前端构建。开发热更新可运行 `npm run dev`，默认通过 Vite 将 API 转发到 `http://127.0.0.1:8000`。构建后的 `dist/widget.js` 为包含 Vue 运行时的独立 IIFE，官网无需安装 Vue，也无需改造现有框架。
+
+后台开发入口为 Vite 的 `/admin.html`。`npm run build` 分别构建咨询组件与后台，后台产物为 `dist/admin.html`、`dist/admin.js` 和 `dist/admin.css`；FastAPI 在 `/admin`、`/admin.js`、`/admin.css` 提供这些文件。缺失后台构建时返回 503 并提示重新构建。后台复用已安装的 Ant Design Vue，桌面采用可折叠侧栏，窄屏采用遮罩导航；资料列表每页 10 条，审核发布必须填写依据并完成四项核对。
 
 内部后台 `/admin` 未登录时仅显示登录页；登录后隐藏账号密码表单，显示账号和退出按钮。默认进入课程资料管理，运行告警与问答调试分别切换。课程列表由管理员接口 `/admin/courses` 合并 `APPROVED_COURSE_CATALOG_PATH` 指向的运营登记和已有资料的课程编号生成，支持名称/编号搜索，不再固定三个课程。登记新课程仍需维护该目录，后台不会自动同步官网或修改课程开放范围。资料支持名称与状态筛选；上传前必须选择具体课程。退出或接口返回 401 后清空旧账号的页面内容。
 
