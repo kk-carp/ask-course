@@ -11,7 +11,7 @@ from sqlalchemy import select
 from backend.config import settings
 from backend.models import Chunk, Document
 from backend.services import ingest_service as ingest
-from backend.services.document_admin_service import DocumentDeleteError, publish_document, set_document_offline
+from backend.services.document_admin_service import DocumentDeleteError, publish_document
 from backend.services.material_safety import REVIEW_CHECKS
 
 

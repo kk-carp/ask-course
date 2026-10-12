@@ -22,7 +22,7 @@ from backend.models import Document, DocumentStatus, TopicOwner  # noqa: E402
 from backend.services.approved_courses import get_approved_course  # noqa: E402
 from backend.services.course_qr_service import lookup_official_presale  # noqa: E402
 from backend.services.topic_owner_service import is_usable_contact  # noqa: E402
-from scripts.audit_materials import audit_database, audit_files
+from scripts.audit_materials import audit_database, audit_files  # noqa: E402
 
 
 def _content_complete(course_id: str, catalog_path: Path) -> bool:
