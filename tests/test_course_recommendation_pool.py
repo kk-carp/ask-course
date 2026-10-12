@@ -1,4 +1,4 @@
-"""试运行推荐池可以先展示官网课程，同时继续阻断未审核购买。"""
+"""试运行课程通过完整审核后进入推荐池并生成购买入口；其余课程保持草稿。"""
 
 import json
 from pathlib import Path
@@ -9,14 +9,21 @@ from backend.services.approved_courses import (
 )
 from backend.services.course_catalog_service import OfficialCourse
 
+PILOT_IDS = {"42", "43", "99"}
 
-def test_three_courses_are_recommendable_but_not_purchase_approved(monkeypatch):
+
+def test_pilot_courses_are_approved_with_purchase_pages(monkeypatch):
     path = Path(__file__).resolve().parents[1] / "data" / "approved_courses.json"
     catalog = json.loads(path.read_text(encoding="utf-8"))
-    assert {row["id"] for row in catalog["courses"] if row["status"] == "recommendable"} == {
-        "42", "43", "99"
-    }
-    assert parse_approved_courses(catalog) == ()
+    statuses = {row["id"]: row["status"] for row in catalog["courses"]}
+    assert {key for key, value in statuses.items() if value == "approved"} == PILOT_IDS
+    assert {key for key, value in statuses.items() if value not in {"approved", "draft"}} == set()
+
+    approved = {item.id: item for item in parse_approved_courses(catalog)}
+    assert set(approved) == PILOT_IDS
+    for course_id, item in approved.items():
+        assert item.purchase_url == f"https://www.arborseek.com/course/{course_id}"
+
     monkeypatch.setattr(
         "backend.services.approved_courses.load_official_courses",
         lambda: tuple(
@@ -24,6 +31,4 @@ def test_three_courses_are_recommendable_but_not_purchase_approved(monkeypatch):
             for row in catalog["courses"]
         ),
     )
-    assert {item.course_id for item in load_recommendable_courses()} == {
-        "42", "43", "99"
-    }
+    assert {item.course_id for item in load_recommendable_courses()} == PILOT_IDS

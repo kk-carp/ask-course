@@ -2,7 +2,7 @@
 
 [文档导航](../README.md) · [当前实现](../architecture/current-system.md)
 
-首批试运行课程页 ID 为 **42、43、99**。官网公开列表中的 26 门课已登记在 [`data/approved_courses.json`](../../data/approved_courses.json)：42、43、99 为 `recommendable`，其余为 `draft`。前三门可依据官网现有介绍进入选课推荐，但基础、硬件、投入时间及购买页尚未完成运营审核，因此推荐结果不附付款入口。当前 `PILOT_PERCENT=0`；官网组件仍按上线门禁关闭。
+首批试运行课程页 ID 为 **42、43、99**。官网公开列表中的 26 门课已登记在 [`data/approved_courses.json`](../../data/approved_courses.json)：42、43、99 为 `approved`，其余为 `draft`。前三门已填写适合人群、基础要求、学习目标、硬件与每周最低投入，五项审核均已通过（2026-10-12），可按适配条件推荐并生成对应 `https://www.arborseek.com/course/{id}` 购买入口。仓库默认 `PILOT_PERCENT=0`，官网组件仍按上线门禁关闭；正式放量前须完成下文的自动检查与人工验收。
 
 ## 1. 运营交付
 
