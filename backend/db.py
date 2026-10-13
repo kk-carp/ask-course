@@ -159,6 +159,11 @@ def init_db() -> None:
         with current_engine.begin() as connection:
             connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
 
+    if current_engine.dialect.name == "postgresql":
+        with current_engine.connect() as connection:
+            vector_type = connection.execute(text("SELECT format_type(atttypid, atttypmod) FROM pg_attribute WHERE attrelid='chunks'::regclass AND attname='embedding'")).scalar_one()
+        if vector_type != f"vector({settings.embedding_dim})":
+            raise RuntimeError("索引向量维度与配置不一致，请使用独立匹配的索引库")
     Base.metadata.create_all(bind=current_engine)
     _ensure_chunk_source_columns(current_engine)
     _ensure_document_content_hash(current_engine)

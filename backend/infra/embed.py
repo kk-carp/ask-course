@@ -31,8 +31,18 @@ def load_model() -> None:
             if not torch.cuda.is_available():
                 torch.set_num_threads(settings.embed_cpu_threads)
             _log.info("loading SentenceTransformer(%s) — first run may download weights", settings.embed_model)
-            _model = SentenceTransformer(settings.embed_model)
+            options = {"device": settings.embed_device}
+            if settings.embed_revision:
+                options["revision"] = settings.embed_revision
+            candidate = SentenceTransformer(settings.embed_model, **options)
+            dimension = (candidate.get_embedding_dimension() if hasattr(candidate, "get_embedding_dimension")
+                         else candidate.get_sentence_embedding_dimension())
+            if dimension != settings.embedding_dim:
+                raise ServiceUnavailableError("模型输出维度与配置不一致")
+            _model = candidate
             _log.info("embed model ready")
+        except ServiceUnavailableError:
+            raise
         except Exception as exc:  # pragma: no cover - 依赖真实模型环境
             raise ServiceUnavailableError("向量模型加载失败") from exc
 
@@ -63,6 +73,9 @@ def encode_documents(texts: list[str]) -> list[list[float]]:
         return []
 
     model = _ensure_model()
+    if settings.embed_token_limit:
+        if any(len(model.tokenizer.encode(t, add_special_tokens=True)) > settings.embed_token_limit for t in texts):
+            raise ValueError("文档切片超过模型 token 上限")
     try:
         embeddings = model.encode(
             texts,
@@ -91,6 +104,10 @@ def encode_query(question: str) -> list[float]:
     if not text:
         raise ValueError("问题不能为空")
 
+    text = settings.embed_query_instruction + text
+    model = _ensure_model()
+    if settings.embed_token_limit and len(model.tokenizer.encode(text, add_special_tokens=True)) > settings.embed_token_limit:
+        raise ValueError("问题超过检索模型长度限制，请缩短问题")
     vectors = encode_documents([text])
     if not vectors:
         raise ServiceUnavailableError("问题向量编码失败")

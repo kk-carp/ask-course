@@ -20,7 +20,7 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 docker run -d --name p0-pg -p 5432:5432 `
   -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=arborseek_p0 pgvector/pgvector:pg16
 
-# 确认数据库就绪后执行迁移，当前 head 为 0004
+# 确认数据库就绪后执行迁移，当前 head 为 0005
 python -m alembic upgrade head
 python -m alembic current
 
@@ -48,3 +48,9 @@ python scripts/smoke_kernel.py
 自检验证检索内核及售前规则的基础行为，不需要数据库、模型或 API Key，不代替真实课程问答和生产验收。
 
 下一步：[内部运营](../operations/L0_OPERATIONS.md) · [接口示例](../reference/api-examples.md)。默认数据库口令和演示账号仅用于本地；生产部署见[部署手册](../operations/DEPLOYMENT.md)。
+
+## 向量维度与迁移 0005
+
+`0005` 对 PostgreSQL 的目标列类型由执行迁移时的 `EMBEDDING_DIM` 决定。同为 0005 的库可能是 1024 维或 512 维；只看 Alembic 版本不足以判断索引兼容，必须同时核对列类型、模型 ID/版本、输出维度和重新入库记录。
+
+维度变化仅允许空 chunks 表；非空表拒绝转换。更换模型使用独立库重新入库，不把原向量强制转换或混用。应用启动会核对配置与数据库维度。`downgrade` 的目标固定为基线 1024 维，且非空表拒绝降级；它不恢复任意先前模型配置，不能当作通用索引回滚。SQLite 不改变向量类型。

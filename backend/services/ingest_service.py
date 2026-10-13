@@ -215,6 +215,8 @@ def ingest_document(file: UploadFile, space_id: str, *, replace: bool = False, c
         )
         if not chunks:
             raise ValueError("文档解析后无可用文本片段")
+        from backend.infra.token_chunks import token_safe_chunks
+        chunks = token_safe_chunks(chunks)
         embeddings = encode_documents(chunks)
         if len(embeddings) != len(chunks):
             raise RuntimeError("切片数与向量数不一致")

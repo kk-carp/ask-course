@@ -36,7 +36,11 @@ class Settings(BaseSettings):
     chat_model: str = "deepseek-chat"
 
     embed_model: str = "BAAI/bge-m3"
-    embedding_dim: int = 1024
+    embedding_dim: int = Field(default=1024, ge=1, le=4096)
+    embed_revision: str = ""
+    embed_device: str = "cpu"
+    embed_token_limit: int = 0
+    embed_query_instruction: str = ""
     course_facts_path: str = "data/course_facts.json"
     official_course_drafts_path: str = "data/official_course_drafts"
     website_public_origin: str = "https://www.arborseek.com"
