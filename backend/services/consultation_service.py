@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.config import settings
 from backend.domain.website_owner import WebsiteOwner, as_owner
 from backend.models import VisitorConsultation
 from backend.services.approved_courses import (
@@ -225,7 +226,7 @@ def _recommend(profile: dict, course_id: str | None) -> list[dict]:
             "audience": reviewed.audience if reviewed else "",
             "prerequisites": reviewed.prerequisites if reviewed else "",
             "purchase_url": reviewed.purchase_url if reviewed else None,
-            "source_url": f"https://www.arborseek.com/course/{item.course_id}",
+            "source_url": f"{settings.website_public_origin}/course/{item.course_id}",
             # 官网简介无法证明硬件门槛；先给相关课程，再让访客自愿补充条件。
             "missing_fields": ["hardware"] if (
                 "hardware" not in profile

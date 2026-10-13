@@ -6,16 +6,13 @@ from fastapi import HTTPException
 
 from backend.config import settings
 
-IDENTITY_URL = "https://arboradmin.saikr.com/miniapp/me"
-
-
 def lookup_member(authorization: str) -> str:
     # Fixed destination and redirects disabled: a response cannot forward a
     # customer's Bearer credential to another host. No cookies or staff auth.
     try:
         with Client(timeout=settings.website_identity_timeout_seconds,
                     follow_redirects=False) as client:
-            response = client.post(IDENTITY_URL, headers={
+            response = client.post(settings.website_identity_url, headers={
                 "Accept": "application/json", "Authorization": authorization,
                 # The observed website request sends both headers. Derive the
                 # second from the same validated input; never forward an

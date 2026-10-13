@@ -9,11 +9,12 @@
 import json
 import re
 from pathlib import Path
+from backend.config import settings
 
 from backend.services.course_catalog_service import OfficialCourse
 from backend.services.course_facts import fact_topic
 
-_DRAFTS = Path(__file__).resolve().parents[2] / "data" / "official_course_drafts"
+_DRAFTS = Path(__file__).resolve().parents[2] / settings.official_course_drafts_path
 
 ANSWER_PUBLIC_INSUFFICIENT = (
     "当前公开资料不足以回答这一点。你可以查看官网课程详情，或向课程顾问确认。"

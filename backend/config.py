@@ -37,6 +37,9 @@ class Settings(BaseSettings):
 
     embed_model: str = "BAAI/bge-m3"
     embedding_dim: int = 1024
+    course_facts_path: str = "data/course_facts.json"
+    official_course_drafts_path: str = "data/official_course_drafts"
+    website_public_origin: str = "https://www.arborseek.com"
     embed_batch_size: int = 8
     embed_cpu_threads: int = 2
 
@@ -139,6 +142,7 @@ class Settings(BaseSettings):
 
     # Opt-in only after website logout/revocation passes real verification.
     website_identity_enabled: bool = False
+    website_identity_url: str = "https://arboradmin.saikr.com/miniapp/me"
     website_identity_provider: str = "arborseek-production"
     website_identity_timeout_seconds: float = Field(default=3.0, gt=0, le=10)
     # Local request deadline, not the upstream token's expiry or a login session.
@@ -197,6 +201,11 @@ def assert_safe_for_environment() -> None:
     """正式环境拒绝开发配置，并强制满足 L0 的内容与人工兜底门禁。"""
     if not is_prod_env():
         return
+    identity_url = urlparse(settings.website_identity_url)
+    if identity_url.scheme != "https" or identity_url.netloc != "arboradmin.saikr.com" or identity_url.path != "/miniapp/me" or identity_url.query or identity_url.fragment:
+        raise RuntimeError("正式环境身份校验必须使用固定官网 HTTPS 接口")
+    if settings.website_public_origin != "https://www.arborseek.com":
+        raise RuntimeError("正式环境课程跳转必须使用官网地址")
     if not settings.secret_key or settings.secret_key == DEFAULT_SECRET_KEY:
         raise RuntimeError("正式环境禁止使用默认 SECRET_KEY，请改成随机字符串。")
     if not settings.demo_password or settings.demo_password == DEFAULT_DEMO_PASSWORD:

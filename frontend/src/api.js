@@ -1,7 +1,9 @@
+import {authHeaders} from './credentials.js';
+
 export async function json(api, path, method = 'GET', payload, {signal} = {}) {
   const response = await fetch(api(path), {
     method, credentials: 'include', cache: 'no-store', signal,
-    headers: payload ? {'Content-Type': 'application/json'} : {},
+    headers: {...authHeaders(api(path)), ...(payload ? {'Content-Type': 'application/json'} : {})},
     body: payload ? JSON.stringify(payload) : undefined,
   });
   if (!response.ok) {
@@ -13,7 +15,7 @@ export async function json(api, path, method = 'GET', payload, {signal} = {}) {
 
 export async function streamAsk(api, payload, onPart, {signal, onEvent} = {}) {
   const response = await fetch(api('ask/stream'), {
-    method: 'POST', credentials: 'include', signal, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload),
+    method: 'POST', credentials: 'include', signal, headers: {...authHeaders(api('ask/stream')), 'Content-Type': 'application/json'}, body: JSON.stringify(payload),
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
@@ -62,6 +64,11 @@ export const httpsUrl = value => {
   catch { return ''; }
 };
 export function courseUrl(item) {
-  if (/^https:\/\/www\.arborseek\.com\/course\/\d+\/?$/.test(item.source_url || '')) return item.source_url;
-  return /^\d+$/.test(String(item.id || '')) ? `https://www.arborseek.com/course/${item.id}` : '';
+  if (typeof location === 'undefined' || !/^\d+$/.test(String(item.id || ''))) return '';
+  try {
+    const url = new URL(item.source_url || `/course/${item.id}`, location.href);
+    return ['http:', 'https:'].includes(url.protocol) && url.origin === location.origin
+      && !url.username && !url.password && !url.search && !url.hash
+      && url.pathname.replace(/\/$/, '') === `/course/${item.id}` ? url.href : '';
+  } catch { return ''; }
 }

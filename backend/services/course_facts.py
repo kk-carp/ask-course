@@ -90,7 +90,7 @@ def answer_course_fact(question: str, course_id: str) -> tuple[str, list[dict]] 
         status = "official" if price is not None else "unknown"
         return answer, [{"source": f"{settings.course_detail_url.rstrip('/')}/{course_id}", "updated_at": timestamp, "status": status}]
     try:
-        registry = json.loads((ROOT / "data/course_facts.json").read_text(encoding="utf-8"))
+        registry = json.loads((ROOT / settings.course_facts_path).read_text(encoding="utf-8"))
         record = registry[course_id]
         fact = record["facts"][topic]
     except (OSError, ValueError, KeyError, TypeError):

@@ -1,5 +1,7 @@
 import { createApp, reactive, nextTick } from 'vue';
 import Widget from './Widget.vue';
+import {authHeaders} from './credentials.js';
+import {json} from './api.js';
 import styles from './widget.css?inline';
 
 const script = document.currentScript || document.querySelector('script[type="module"][src$="/src/main.js"]');
@@ -13,7 +15,9 @@ async function bootstrap() {
   const api = path => new URL(path, base).toString();
   const pageContext = reactive({courseId: pageCourse || null});
   const loadConfig = signal => preview ? Promise.resolve({enabled:true}) : request(api(`widget/config?${siteMode ? 'mode=site&' : ''}course_id=${encodeURIComponent(pageContext.courseId || '')}`), signal);
-  let config = await loadConfig();
+  let config;
+  try { config = await loadConfig(); }
+  catch { config = {enabled:false}; } // Keep the identity bridge available for a later successful login.
   if (!globalThis.AnswerFormat) {
     for (const path of ['vendor/answer-libs.js', 'answer-format.js']) {
       await new Promise((resolve, reject) => {
@@ -40,10 +44,14 @@ async function bootstrap() {
   };
   // Notification only: the website completes its own auth change first. No account
   // IDs, roles or credentials from an event grant access to history.
-  async function identityChanged({broadcast = true} = {}) {
+  async function identityChanged({broadcast = true, suspend = false, associateConversationId, signal} = {}) {
     const mine = ++revision;
     identityCheck?.abort();
-    configRequest?.abort(); configRequest = new AbortController();
+    configRequest?.abort();
+    const control = configRequest = new AbortController();
+    const abort = () => control.abort();
+    if (signal?.aborted) abort();
+    else signal?.addEventListener('abort', abort, {once:true});
     widget?.clearIdentityState();
     const oldApp = widgetApp;
     // Ant Design inputs may have queued a nextTick update from the same input
@@ -61,17 +69,30 @@ async function bootstrap() {
     if (broadcast) {
       try { localStorage.setItem('arborseek-identity-revision', crypto.randomUUID()); } catch { /* ignore */ }
     }
+    if (suspend) {
+      signal?.removeEventListener('abort', abort);
+      return;
+    }
     try {
-      const next = await loadConfig(configRequest.signal);
+      if (control.signal.aborted) throw new DOMException('咨询记录同步已取消', 'AbortError');
+      let associationError;
+      if (associateConversationId) {
+        try { await json(api, `widget/conversations/${encodeURIComponent(associateConversationId)}/associate`, 'POST', undefined, {signal: control.signal}); }
+        catch (error) { associationError = error; }
+      }
+      if (control.signal.aborted) throw new DOMException('咨询记录同步已取消', 'AbortError');
+      const next = await loadConfig(control.signal);
       await disposed;
       if (mine !== revision) return;
+      if (control.signal.aborted) throw new DOMException('咨询记录同步已取消', 'AbortError');
       config = next;
-      // An identity change starts with no selected consultation; history comes
-      // from the newly verified owner, never from another owner's browser key.
       if (config.enabled) mount(true);
+      if (associationError) throw associationError;
       return {enabled:!!config.enabled};
     } catch (cause) {
-      if (mine === revision) throw cause; // Keep the old identity's view closed on failure.
+      if (mine === revision) throw cause;
+    } finally {
+      signal?.removeEventListener('abort', abort);
     }
   }
   async function checkIdentity() {
@@ -91,7 +112,15 @@ async function bootstrap() {
   const setPageContext = ({courseId} = {}) => {
     pageContext.courseId = /^\d{1,12}$/.test(String(courseId || '')) ? String(courseId) : null;
   };
-  globalThis.ArborseekAgent = Object.freeze({setPageContext, identityChanged});
+  function getLoginContext() {
+    return {conversationId: config.identity_kind === 'guest' ? widget?.selectedConversationId() : undefined};
+  }
+  function prepareIdentityChange() {
+    const context = getLoginContext();
+    identityChanged({suspend:true, broadcast:false}).catch(() => {});
+    return context;
+  }
+  globalThis.ArborseekAgent = Object.freeze({setPageContext, identityChanged, prepareIdentityChange, getLoginContext});
   window.addEventListener('popstate', () => setPageContext({courseId: location.pathname.match(/^\/course\/(\d+)\/?$/)?.[1]}));
   window.addEventListener('arborseek:identity-changed', () => identityChanged().catch(() => {}));
   window.addEventListener('storage', event => { if (event.key === 'arborseek-identity-revision') identityChanged({broadcast:false}).catch(() => {}); });
@@ -99,7 +128,7 @@ async function bootstrap() {
   document.addEventListener('visibilitychange', checkIdentity);
 }
 async function request(url, signal) {
-  const response = await fetch(url, {credentials: 'include', cache: 'no-store', signal});
+  const response = await fetch(url, {credentials: 'include', cache: 'no-store', signal, headers: authHeaders(url)});
   if (!response.ok) throw new Error('组件暂不可用');
   return response.json();
 }

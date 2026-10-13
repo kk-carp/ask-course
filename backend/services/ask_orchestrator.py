@@ -107,7 +107,7 @@ def related_course_card(
         title=course.title,
         description=course.description or None,
         purchase_url=purchase_url,
-        source_url=f"https://www.arborseek.com/course/{course.course_id}",
+        source_url=f"{settings.website_public_origin}/course/{course.course_id}",
         cover_url=course.cover_url,
     )
 
@@ -384,7 +384,7 @@ def _enrich_related(related: list[RelatedCourse]) -> list[RelatedCourse]:
                 purchase_url=item.purchase_url
                 or (approved.purchase_url if approved else None),
                 source_url=item.source_url
-                or f"https://www.arborseek.com/course/{item.id}",
+                or f"{settings.website_public_origin}/course/{item.id}",
                 cover_url=item.cover_url
                 or (official.cover_url if official else None),
                 reason=item.reason or ("与当前咨询方向相关，依据官网课程介绍。" if official else None),

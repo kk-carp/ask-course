@@ -57,7 +57,7 @@ def test_me_maps_only_verified_id_and_rechecks_without_caching(me, credential, c
     owner.check_current()
     assert len(me["calls"]) == 2
     for call in me["calls"]:
-        assert str(call.url) == upstream.IDENTITY_URL
+        assert str(call.url) == settings.website_identity_url
         assert call.method == "POST" and call.content == b""
         assert call.headers["authorization"] == "Bearer " + credential
         assert call.headers["token"] == credential

@@ -191,3 +191,25 @@ test('identity notification can enable an initially gated widget without showing
   view.state.config = config('A'); await view.win.ArborseekAgent.identityChanged();
   assert.equal(view.host.hidden, false); clean(view);
 });
+
+test('taking login context does not discard a guest conversation or broadcast',async t=>{
+ const view=await fixture(t,{initial:config('guest'),stored:{'arborseek-consultation:guest':'guest-selected'}});
+ await until(()=>view.shadow.textContent.includes('A 私密回答'));
+ const before=view.state.calls.length;
+ assert.equal(view.win.ArborseekAgent.getLoginContext().conversationId,'guest-selected');
+ assert.equal(view.win.localStorage.getItem('arborseek-consultation:guest'),'guest-selected');
+ assert.equal(view.win.localStorage.getItem('arborseek-identity-revision'),null);
+ assert.equal(view.state.calls.length,before);
+});
+
+test('a cancelled login sync cannot mount a late configuration response',async t=>{
+ const pending=deferred();let delay=false;
+ const view=await fixture(t,{intercept:call=>delay&&call.pathname.endsWith('/widget/config')?pending.promise:undefined});
+ delay=true;
+ const controller=new AbortController();
+ const switching=view.win.ArborseekAgent.identityChanged({signal:controller.signal});
+ controller.abort();pending.resolve(data(config('B')));
+ await assert.rejects(switching,{name:'AbortError'});
+ assert.equal(view.host.hidden,true);
+ assert.equal(view.shadow.querySelector('textarea'),null);
+});

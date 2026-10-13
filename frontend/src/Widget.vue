@@ -99,7 +99,7 @@ function clearIdentityState() {
   editingSession.value = null; nameDraft.value = ''; historyError.value = '';
   historyLoading.value = false; nextHistoryOffset.value = null;
 }
-defineExpose({clearIdentityState});
+defineExpose({clearIdentityState, selectedConversationId: () => conversationId});
 onBeforeUnmount(() => {
   live = false; requests.abort(); window.removeEventListener('resize', syncScroll); if (previousOverflow !== null) document.body.style.overflow = previousOverflow;
   cancelAnimationFrame(anchorFrame); anchorObserver?.disconnect(); window.removeEventListener('resize', anchorLauncher); document.removeEventListener('transitionend', anchorLauncher, true);

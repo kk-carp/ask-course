@@ -53,10 +53,12 @@ class ApprovedCourse:
 def valid_purchase_url(url: str, course_id: str) -> bool:
     try:
         parsed = urlparse(url)
+        expected = urlparse(settings.website_public_origin)
+        default_port = 443 if parsed.scheme == "https" else 80
         return (
-            parsed.scheme == "https"
-            and parsed.hostname == "www.arborseek.com"
-            and parsed.port in {None, 443}
+            parsed.scheme == expected.scheme
+            and parsed.hostname == expected.hostname
+            and (parsed.port or default_port) == (expected.port or default_port)
             and parsed.path.rstrip("/") == f"/course/{course_id}"
             and not parsed.username
             and not parsed.password
@@ -135,7 +137,7 @@ def parse_approved_courses(payload: object) -> tuple[ApprovedCourse, ...]:
                 min_basis=raw["min_basis"],
                 min_weekly_hours=raw["min_weekly_hours"],
                 purchase_url=url,
-                source_url=f"https://www.arborseek.com/course/{course_id}",
+                source_url=f"{settings.website_public_origin}/course/{course_id}",
             )
         )
         seen.add(course_id)
