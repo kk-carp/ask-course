@@ -20,7 +20,7 @@
 - [游客接入](integration/游客接入.md)：独立 `/consult`、官网脚本、游客历史协议。
 - [官网客户身份与历史归属](integration/官网客户身份与历史归属.md)：主体、权限、关联及保留规则。
 - [官网身份校验接口](integration/官网身份校验接口.md)：请求契约、适配器行为和启用条件。
-- [官网身份事件接入](integration/官网身份事件接入.md)：助手清理通知桥及尚未接入的官网事件。
+- [官网身份事件接入](integration/官网身份事件接入.md)：助手清理通知桥、已接入的官网事件及生产验收条件。
 - [试运行准出](operations/PILOT_LAUNCH.md)：审核、门禁、灰度和关闭条件。
 - [预发布验收](operations/ACCEPTANCE.md)：人工质量、身份隔离和环境签收。
 - [部署、备份与回滚](operations/DEPLOYMENT.md)：部署配置、迁移、恢复和容量验证。
