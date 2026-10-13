@@ -95,7 +95,7 @@ def widget_config(
         "course_title": course.title if course else None,
         "default_prompts": [
             "推荐一门适合我的课程",
-            "按我的基础帮我选课",
+            "适合做保研或毕设吗",
             "我想找课程顾问",
         ],
         "fallback_contact": settings.handoff_fallback_contact

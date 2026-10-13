@@ -18,7 +18,7 @@ from backend.services.course_catalog_service import (
 )
 from backend.services.handoff_service import resolve_handoff
 from backend.services.qa_service import AskResult
-from backend.services.project_guidance import is_project_goal
+from backend.services.project_guidance import course_use_label, is_project_goal, personal_fit_question
 from backend.services.course_facts import fact_topic
 
 _log = logging.getLogger("backend.intent_router")
@@ -144,6 +144,7 @@ def should_enter_guest_consultation(
     *,
     pending_field: str | None,
     looks_like_profile_reply: bool = False,
+    course_id: str | None = None,
 ) -> bool:
     """游客问诊门闸：商业/顾问/付款永不进；无方向或未命中才问诊。
 
@@ -152,6 +153,14 @@ def should_enter_guest_consultation(
     """
     if intent in {Intent.commercial, Intent.advisor, Intent.pay}:
         return False
+    # 已经点明用途或在问一门已知课是否适合自己时，先回答，不再追问学习方向。
+    if course_use_label(question) or personal_fit_question(question):
+        named = any(
+            course.title and course.title in (question or "")
+            for course in load_recommendable_courses()
+        )
+        if (course_id or "").strip() or named:
+            return False
     if pending_field:
         if intent is Intent.recommend:
             return True

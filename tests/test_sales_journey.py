@@ -96,7 +96,8 @@ def test_undergraduate_project_request_gets_options_and_clear_questions(sales_ch
     question = "我是一个本科生，刚接触具身智能，想做一个项目，方便保研，有什么推荐吗？"
     result = send(client, question, first["conversation_id"])
     assert {item["id"] for item in result["related_courses"]} == {"43", "99"}, result["answer"]
-    assert "项目" in result["answer"] and "Python" in result["answer"] and "ROS" in result["answer"]
+    assert "小项目" in result["answer"] and "编程和机器人基础" in result["answer"]
+    assert "为了缩小范围" not in result["answer"]
     assert "具体任务" not in result["answer"] and "没有找到" not in result["answer"]
     assert "保证保研" not in result["answer"]
     assert not any(item["purchase_url"] for item in result["related_courses"])
@@ -106,24 +107,71 @@ def test_project_request_also_works_without_model_and_prior_questions(sales_chat
     client, _ = sales_chat
     result = send(client, "我是本科生，刚接触具身智能，想做保研项目，有什么推荐吗？")
     assert {item["id"] for item in result["related_courses"]} == {"43", "99"}
-    assert "实验记录" in result["answer"] and "完成期限" in result["answer"]
+    assert "机械臂操作演示" in result["answer"] and "导航或巡检演示" in result["answer"]
+    assert "编程和机器人基础" in result["answer"]
+    assert "什么时候完成项目" not in result["answer"]
     cid = result["conversation_id"]
     updated = send(client, "学过 Python，没有机器人，每周四小时", cid)
-    assert "编程基础：" not in updated["answer"]
-    assert "练习条件：" not in updated["answer"]
-    assert "时间投入：" not in updated["answer"]
-    assert "完成期限：" in updated["answer"]
+    assert "编程和机器人基础" not in updated["answer"]
+    assert "什么时候完成项目" in updated["answer"]
     complete = send(client, "两个月内", cid)
-    assert "完成期限：" not in complete["answer"]
+    assert "什么时候完成项目" not in complete["answer"]
 
 
 def test_broad_project_purpose_offers_exploration_candidates(sales_chat):
     client, _ = sales_chat
     result = send(client, "想做一个保研项目，还不知道选什么方向，能推荐吗？")
     assert 1 <= len(result["related_courses"]) <= 3
-    assert "还没有确定具体方向" in result["answer"]
+    assert "还没定具体题目也可以" in result["answer"]
+    assert "还没有确定具体方向" not in result["answer"]
+    assert "依据官网课程介绍" not in result["answer"]
+    assert "编程和机器人基础" in result["answer"]
+    assert "每周" not in result["answer"]
+
+
+def test_course_use_questions_answer_the_current_course(sales_chat):
+    client, _ = sales_chat
+    result = send(client, "这个课程适合作为保研项目吗", course_id="43")
+    assert result["intent"] == "course_info"
+    assert result["related_courses"][0]["id"] == "43"
+    assert "四足机器人无人巡检实训营" in result["answer"]
     assert "选题参考" in result["answer"]
-    assert "Python" in result["answer"] and "每周" in result["answer"]
+    assert "不能决定录取" in result["answer"]
+    assert "你主要想通过课程完成什么" not in result["answer"]
+    assert "保证保研" not in result["answer"]
+    for question in ("这门课适合做毕设吗", "这个课程对竞赛有用吗", "能当求职项目吗", "对找工作有帮助吗"):
+        judged = send(client, question, course_id="99")
+        assert judged["related_courses"][0]["id"] == "99", question
+        assert "你主要想通过课程完成什么" not in judged["answer"]
+        assert "智能机械臂抓取与操作实训营" in judged["answer"]
+    named = send(client, "四足机器人无人巡检实训营适合作为保研项目吗")
+    assert named["related_courses"][0]["id"] == "43"
+    assert "不能决定录取" in named["answer"]
+
+
+def test_personal_fit_on_a_course_does_not_ask_for_a_new_direction(sales_chat):
+    client, _ = sales_chat
+    result = send(client, "这门课适合我吗", course_id="43")
+    assert result["related_courses"][0]["id"] == "43"
+    assert "编程和机器人基础" in result["answer"]
+    assert "你主要想通过课程完成什么" not in result["answer"]
+    assert "ROS、机器人巡检或机械臂" not in result["answer"]
+
+
+def test_use_question_without_a_course_still_explores_instead_of_asking_direction(sales_chat):
+    client, _ = sales_chat
+    result = send(client, "适合作为保研项目吗")
+    assert result["related_courses"]
+    assert "你主要想通过课程完成什么" not in result["answer"]
+    assert result["answer"].startswith("可以。")
+    assert "保研材料" in result["answer"]
+    assert "还没定具体题目也可以" not in result["answer"]
+    assert "依据官网课程介绍" not in result["answer"]
+    both = send(client, "适合做保研或毕设吗")
+    assert both["answer"].startswith("可以。")
+    assert "保研材料或毕设选题" in both["answer"]
+    assert "还没定具体题目也可以" not in both["answer"]
+    assert "保证保研" not in both["answer"]
 
 
 def test_old_hardware_question_accepts_bare_no(sales_chat):

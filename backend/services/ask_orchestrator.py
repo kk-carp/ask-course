@@ -65,6 +65,7 @@ from backend.services.profile_extraction import (
     extract_profile_updates,
     looks_like_profile,
 )
+from backend.services.project_guidance import answer_course_use, answer_personal_fit, course_use_label, personal_fit_question
 from backend.services.public_course_info import (
     ANSWER_PUBLIC_INSUFFICIENT,
     answer_public_question,
@@ -212,6 +213,7 @@ def _prepare_guest_dialogue(
             looks_like_profile_reply=looks_like_profile(payload.question, pending) or (
                 bool(updates) and not re.search(r"[？?]|吗|什么|怎么|多少|多久|能否", payload.question)
             ),
+            course_id=(payload.course_id or (understanding.course_id if understanding else None)),
         )
         preview = None
         if selection:
@@ -310,14 +312,16 @@ def _selection_response(preview: dict) -> tuple[AskResult, list[RelatedCourse]]:
             )
             for item in preview["recommendations"]
         ]
+        prefix = "- " if preview.get("guidance") else ""
         reasons = "\n".join(
-            f"{item['title']}：{item['reason']}" for item in preview["recommendations"]
+            f"{prefix}{item['title']}：{item['reason']}" for item in preview["recommendations"]
         )
-        followup = (
-            f"如果方便，也可以补充：{preview['question']}"
-            if preview["question"]
-            else "你可以继续问课程内容、学习方式，或查看官网详情。"
-        )
+        if preview["question"] and preview.get("guidance"):
+            followup = preview["question"]
+        elif preview["question"]:
+            followup = f"如果方便，也可以补充：{preview['question']}"
+        else:
+            followup = "你可以继续问课程内容、学习方式，或查看官网详情。"
         return (
             AskResult(
                 answer="\n\n".join(filter(None, [acknowledgement, preview.get("guidance"), reasons, followup])),
@@ -610,6 +614,28 @@ def _collect_question_results(questions, execute, futures, responses, failures):
         yield "part", {"index": len(responses), "question": question, **result.model_dump(mode="json")}
 
 
+def _course_judgment(question: str, course_id: str | None):
+    """对已知课程的用途或适不适合，直接依据官网介绍回答。"""
+    if not course_use_label(question) and not personal_fit_question(question):
+        return None
+    courses = load_recommendable_courses()
+    named = [course for course in courses if course.title and course.title in (question or "")]
+    if len(named) > 1:
+        return None
+    course = named[0] if named else None
+    if course is None and (course_id or "").strip():
+        course = next((item for item in courses if item.course_id == str(course_id)), None)
+        if course is None:
+            from backend.services.course_catalog_service import get_course_by_id
+            course = get_course_by_id(str(course_id))
+    if course is None:
+        return None
+    label = course_use_label(question)
+    if label:
+        return course, answer_course_use(course.title, course.description or "", label)
+    return course, answer_personal_fit(course.title, course.description or "")
+
+
 def _run_single_question(
     payload: AskRequest, identity: AskIdentity, *,
     context_question: str | None = None,
@@ -647,6 +673,17 @@ def _run_single_question(
                 _enrich_related(related),
                 intent=Intent.recommend.value,
             )
+
+    judged = _course_judgment(payload.question, dialogue_course_id)
+    if judged is not None:
+        course, answer = judged
+        return AskResponse(
+            answer=answer,
+            hit=False,
+            conversation_id=UUID(dialogue_id) if dialogue_id else None,
+            related_courses=_enrich_related([related_course_card(course)]),
+            intent="course_info",
+        )
 
     if context_question and not dialogue_course_id:
         matches = search_related_courses(

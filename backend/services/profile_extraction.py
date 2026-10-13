@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from backend.services.consultation_service import validate_answer
+from backend.services.project_guidance import course_use_goal, course_use_label
 
 _SPECIFIC_GOAL = re.compile(r"ROS|巡检|机械臂|抓取|导航|SLAM|大模型|智能体|编程|视觉|具身|保研|毕设|毕业设计|竞赛|项目", re.IGNORECASE)
 _GOAL_STATEMENT = re.compile(r"(?:想学|想学习|想做|希望做|准备做|打算做|目标是|方向是)(.{0,100})")
@@ -75,6 +76,8 @@ def _rules(text: str) -> dict:
 def extract_profile_updates(text: str, current: dict, expected_field: str | None = None) -> dict:
     """按明确措辞提取槽位；未知项由本轮语义理解或后续追问处理。"""
     proposal = {**_contextual_reply(text, expected_field), **_rules(text)}
+    if "goal" not in proposal and course_use_goal(text):
+        proposal["goal"] = course_use_goal(text)
     goal_statement = _GOAL_STATEMENT.search(text)
     updates: dict = {}
     for field in ("goal", "basis", "hardware", "weekly_hours", "deadline"):
@@ -84,7 +87,8 @@ def extract_profile_updates(text: str, current: dict, expected_field: str | None
             value = validate_answer(field, proposal[field])
         except ValueError:
             continue
-        if field == "goal" and expected_field != "goal" and not _SPECIFIC_GOAL.fullmatch(text.strip()) and (
+        stated_use = course_use_label(text)
+        if field == "goal" and expected_field != "goal" and not stated_use and not _SPECIFIC_GOAL.fullmatch(text.strip()) and (
             not goal_statement or not _SPECIFIC_GOAL.search(goal_statement.group(1))
         ):
             continue

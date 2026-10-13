@@ -17,7 +17,7 @@ from backend.services.course_catalog_service import OfficialCourse
 from backend.services.course_facts import fact_topic
 from backend.services.intent_router import classify_intent, recommend_has_direction
 from backend.services.profile_extraction import extract_profile_updates
-from backend.services.project_guidance import is_project_goal
+from backend.services.project_guidance import course_use_goal, course_use_label, is_project_goal, personal_fit_question
 from backend.services.question_decomposition import split_questions
 
 _log = logging.getLogger(__name__)
@@ -84,6 +84,13 @@ def understand_turn(question: str, *, page_course_id: str | None, profile: dict,
         and not re.search(r"第|比较|对比|区别|刚才|说错|改成|不是", question)
     )
     if not settings.chat_api_key or is_simple_opening(question) or explicit_facts:
+        return fallback
+    if len(fallback.questions) == 1 and (course_use_label(question) or personal_fit_question(question)):
+        goal = course_use_goal(question)
+        if goal and "goal" not in fallback.profile_updates:
+            fallback.profile_updates = {**fallback.profile_updates, "goal": goal}
+        fallback.intent = "content"
+        fallback.questions = [question]
         return fallback
     allowed = {item.course_id for item in catalog} | set(candidates)
     if page_course_id:

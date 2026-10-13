@@ -122,7 +122,7 @@ def test_consultation_flow_is_owned_and_purchase_is_revalidated(monkeypatch):
         ]
         assert client.get("/widget/config", params={"course_id": "43"}).json()[
             "default_prompts"
-        ][0] == "推荐一门适合我的课程"
+        ] == ["推荐一门适合我的课程", "适合做保研或毕设吗", "我想找课程顾问"]
         created = client.post("/consultations", json={"course_id": "43"}).json()
         assert created["next_field"] == "goal"
         known = client.post("/consultations", json={"course_id": "43", "known_profile": {"basis": "basic"}}).json()
@@ -257,7 +257,7 @@ def test_project_exploration_can_show_eligible_approved_course(monkeypatch):
     monkeypatch.setattr("backend.services.consultation_service.load_approved_courses", lambda: (COURSE,))
     monkeypatch.setattr("backend.services.consultation_service.load_recommendable_courses", lambda: (OfficialCourse("43", COURSE.title, "巡检演示"),))
     result = _recommend({"goal": "保研项目", "basis": "basic", "hardware": "no", "weekly_hours": 4}, None)
-    assert result[0]["id"] == "43" and "先了解" in result[0]["reason"]
+    assert result[0]["id"] == "43" and result[0]["reason"] == "做一段导航或巡检演示，记下任务流程，并比较实验结果。"
 
 
 def test_recommendable_course_uses_official_description_without_purchase(monkeypatch):

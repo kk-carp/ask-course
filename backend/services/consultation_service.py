@@ -208,13 +208,14 @@ def _recommend(profile: dict, course_id: str | None) -> list[dict]:
         if item.course_id in selected:
             continue
         reviewed = approved_by_id.get(item.course_id)
-        reason = (
-            "还没有确定具体方向，可以先了解这门课的项目方向。" if exploratory
-            else "这门课与你的学习方向相关。"
-        )
+        idea = project_idea(item.title, item.description)
         if is_project_goal(profile["goal"]):
-            reason += "\n" + project_idea(item.title, item.description) + "依据官网课程介绍，选题和实施条件还需结合你的基础确认。"
+            reason = idea if exploratory else f"这门课与你的学习方向相关。{idea}"
         else:
+            reason = (
+                "还没有确定具体方向，可以先了解这门课的项目方向。" if exploratory
+                else "这门课与你的学习方向相关。"
+            )
             reason += (
                 f"官网介绍：{item.description or item.title}"
                 "\n目前的公开资料不足以确认个人适配条件，可以先了解课程内容和学习方式。"

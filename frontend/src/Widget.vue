@@ -30,6 +30,30 @@ const historyError = ref(''), historyLoading = ref(false), nextHistoryOffset = r
 const getPopupContainer = () => props.popupContainer;
 const open = ref(false), draft = ref(''), busy = ref(false), turns = ref([]);
 const input = ref(), log = ref(), launcher = ref();
+const logScrolled = ref(false), awayFromLatest = ref(false), copiedIndex = ref(-1), privacyOpen = ref(false);
+let copyTimer = 0;
+function onLogScroll() {
+  const node = log.value;
+  if (!node) return;
+  logScrolled.value = node.scrollTop > 0;
+  awayFromLatest.value = node.scrollHeight - node.scrollTop - node.clientHeight > 200;
+}
+async function copyAnswer(index) {
+  const text = turns.value[index]?.answer || '';
+  let copied = false;
+  try { await navigator.clipboard.writeText(text); copied = true; }
+  catch {
+    const area = document.createElement('textarea');
+    area.value = text; area.setAttribute('readonly', '');
+    area.style.cssText = 'position:fixed;left:0;top:0;opacity:0';
+    props.popupContainer.append(area); area.focus(); area.select();
+    try { copied = document.execCommand('copy'); } catch { copied = false; }
+    area.remove();
+  }
+  if (!copied) return;
+  copiedIndex.value = index; clearTimeout(copyTimer);
+  copyTimer = setTimeout(() => { copiedIndex.value = -1; }, 1600);
+}
 const historyOpen = ref(false), sessions = ref([]);
 const searchOpen = ref(false), search = ref(''), editingSession = ref(null), nameDraft = ref('');
 const filteredSessions = computed(() => sessions.value.filter(session => session.title.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase())));
@@ -39,7 +63,7 @@ const baseKey = props.preview ? 'arborseek-preview-consultation' : 'arborseek-co
 const key = props.config.identity_key ? `${baseKey}:${props.config.identity_key}` : baseKey;
 let conversationId, creationRequestId;
 try { conversationId = localStorage.getItem(key) || undefined; } catch { /* 无持久存储仍可咨询 */ }
-const prompts = props.config.default_prompts?.length ? props.config.default_prompts : ['推荐一门适合我的课程', '按我的基础帮我选课', '我想找课程顾问'];
+const prompts = props.config.default_prompts?.length ? props.config.default_prompts : ['推荐一门适合我的课程', '适合做保研或毕设吗', '我想找课程顾问'];
 const event = name => props.preview || !current() ? Promise.resolve() : requestJson('widget/events', 'POST', {course_id: pageCourse.value, mode: props.siteMode ? 'site' : 'course', event_name: name}).catch(cause => { failure(cause); });
 const newId = () => crypto.randomUUID();
 function rememberId() {
@@ -98,13 +122,14 @@ function clearIdentityState() {
   historyOpen.value = false; searchOpen.value = false; search.value = '';
   editingSession.value = null; nameDraft.value = ''; historyError.value = '';
   historyLoading.value = false; nextHistoryOffset.value = null;
+  logScrolled.value = false; awayFromLatest.value = false; copiedIndex.value = -1; privacyOpen.value = false; clearTimeout(copyTimer);
 }
 defineExpose({clearIdentityState, selectedConversationId: () => conversationId});
 onBeforeUnmount(() => {
-  live = false; requests.abort(); window.removeEventListener('resize', syncScroll); if (previousOverflow !== null) document.body.style.overflow = previousOverflow;
+  live = false; requests.abort(); clearTimeout(copyTimer); window.removeEventListener('resize', syncScroll); if (previousOverflow !== null) document.body.style.overflow = previousOverflow;
   cancelAnimationFrame(anchorFrame); anchorObserver?.disconnect(); window.removeEventListener('resize', anchorLauncher); document.removeEventListener('transitionend', anchorLauncher, true);
 });
-async function scrollAnswer() { await nextTick(); if (log.value) log.value.scrollTop = log.value.scrollHeight; }
+async function scrollAnswer() { await nextTick(); if (log.value) log.value.scrollTop = log.value.scrollHeight; onLogScroll(); }
 function resizeInput() { /* Ant Design Vue 的 autoSize 负责输入框高度。 */ }
 function keydown(e) {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !matchMedia('(pointer: coarse)').matches) { e.preventDefault(); ask(); }
@@ -181,7 +206,7 @@ function reset(archive = true) {
 async function ask(preset, retryTurn) {
   const question = (typeof preset === 'string' ? preset : draft.value).trim();
   if (!question || busy.value || !current()) return;
-  busy.value = true; draft.value = ''; nextTick(resizeInput);
+  privacyOpen.value = false; busy.value = true; draft.value = ''; nextTick(resizeInput);
   let turn;
   if (retryTurn) {
     // 重试更新原回答，避免重复问题与过期重试按钮。
@@ -235,65 +260,78 @@ async function purchase(item, turn) {
 
 <template>
  <StyleProvider :container="styleContainer">
- <AConfigProvider :theme="{token: {colorPrimary: '#1890ff', borderRadius: 10, zIndexPopupBase: 2147483010}}" :get-popup-container="getPopupContainer">
+ <AConfigProvider :theme="{token: {colorPrimary: '#1268d8', borderRadius: 10, zIndexPopupBase: 2147483010}}" :get-popup-container="getPopupContainer">
   <AButton v-show="!open" ref="launcher" type="text" class="as-launch" :style="launchStyle" aria-label="问问探界，课程问答助手" title="问问探界 · 课程问答助手" :aria-expanded="open" aria-controls="arborseek-dialog" @click="open = true">
     <span class="as-launch-mark" aria-hidden="true"><UiIcon name="qa-bot" /></span>
   </AButton>
   <section v-show="open" id="arborseek-dialog" class="as-panel" :class="{open}" role="dialog" aria-label="探界 · 课程助手" @keydown.esc="historyOpen ? historyOpen = false : open = false">
-    <header class="as-head">
-      <APopover :open="historyOpen" trigger="click" placement="bottomLeft" :arrow="false" overlay-class-name="as-history-popover" :get-popup-container="getPopupContainer" @open-change="onHistoryOpen">
-        <AButton type="text" aria-label="对话历史" title="对话历史" :aria-expanded="historyOpen" aria-controls="arborseek-history" :disabled="busy"><UiIcon name="history" /></AButton>
-        <template #content>
-          <div id="arborseek-history" class="as-history" role="region" aria-label="对话历史">
-            <div class="as-history-heading"><h2>对话历史</h2><AButton type="text" aria-label="搜索对话" @click="searchOpen = !searchOpen; search = ''"><UiIcon name="search" /></AButton></div>
-            <AInput v-if="searchOpen" v-model:value="search" placeholder="搜索对话" aria-label="搜索对话内容" allow-clear class="as-history-search" />
-            <div v-if="!filteredSessions.length" class="as-history-empty">{{ sessions.length ? '没有匹配的对话' : '还没有对话，开始一次咨询吧。' }}</div>
-            <div v-for="session in filteredSessions" :key="session.id" class="as-history-item" :aria-current="session.id === activeSession ? 'true' : undefined">
-              <AButton type="text" class="as-history-select" :title="session.title" @click="restoreSession(session)">{{ session.title }}</AButton>
-              <ADropdown trigger="click" :get-popup-container="getPopupContainer" overlay-class-name="as-history-menu">
-                <AButton type="text" class="as-session-more" :aria-label="'管理对话：' + session.title"><UiIcon name="more" /></AButton>
-                <template #overlay><AMenu @click="({key}) => sessionAction(key, session)" :items="menuItems" /></template>
-              </ADropdown>
-            </div>
-            <p v-if="historyLoading" class="as-history-note">正在加载…</p>
-            <p v-if="historyError" class="as-error" role="alert">{{ historyError }}</p>
-            <AButton v-if="durable && nextHistoryOffset !== null" :disabled="historyLoading" @click="refreshHistory(nextHistoryOffset)">加载更多</AButton>
-            <p class="as-history-note">{{ durable ? `${config.identity_kind === 'customer' ? '本人对话' : '本浏览器游客对话'}保留 ${config.history_hours || 24} 小时，按消息活动时间计算。` : '仅保留本次页面访问的对话，刷新后清空。' }}</p>
-          </div>
-        </template>
-      </APopover>
+    <header class="as-head" :class="{'is-scrolled': logScrolled}">
       <strong class="as-title">探界 · 课程助手</strong>
       <div class="as-head-actions">
+        <APopover :open="historyOpen" trigger="click" placement="bottomRight" :arrow="false" overlay-class-name="as-history-popover" :get-popup-container="getPopupContainer" @open-change="onHistoryOpen">
+          <AButton type="text" aria-label="对话历史" title="对话历史" :aria-expanded="historyOpen" aria-controls="arborseek-history" :disabled="busy"><UiIcon name="history" /></AButton>
+          <template #content>
+            <div id="arborseek-history" class="as-history" role="region" aria-label="对话历史">
+              <div class="as-history-heading"><h2>对话历史</h2><AButton type="text" aria-label="搜索对话" @click="searchOpen = !searchOpen; search = ''"><UiIcon name="search" /></AButton></div>
+              <AInput v-if="searchOpen" v-model:value="search" placeholder="搜索对话" aria-label="搜索对话内容" allow-clear class="as-history-search" />
+              <div v-if="!filteredSessions.length" class="as-history-empty">{{ sessions.length ? '没有匹配的对话' : '还没有对话，开始一次咨询吧。' }}</div>
+              <div v-for="session in filteredSessions" :key="session.id" class="as-history-item" :aria-current="session.id === activeSession ? 'true' : undefined">
+                <AButton type="text" class="as-history-select" :title="session.title" @click="restoreSession(session)">{{ session.title }}</AButton>
+                <ADropdown trigger="click" :get-popup-container="getPopupContainer" overlay-class-name="as-history-menu">
+                  <AButton type="text" class="as-session-more" :aria-label="'管理对话：' + session.title"><UiIcon name="more" /></AButton>
+                  <template #overlay><AMenu @click="({key}) => sessionAction(key, session)" :items="menuItems" /></template>
+                </ADropdown>
+              </div>
+              <p v-if="historyLoading" class="as-history-note">正在加载…</p>
+              <p v-if="historyError" class="as-error" role="alert">{{ historyError }}</p>
+              <AButton v-if="durable && nextHistoryOffset !== null" :disabled="historyLoading" @click="refreshHistory(nextHistoryOffset)">加载更多</AButton>
+              <p class="as-history-note">{{ durable ? `${config.identity_kind === 'customer' ? '本人对话' : '本浏览器游客对话'}保留 ${config.history_hours || 24} 小时，按消息活动时间计算。` : '仅保留本次页面访问的对话，刷新后清空。' }}</p>
+            </div>
+          </template>
+        </APopover>
         <AButton type="text" aria-label="新会话" title="新会话" :disabled="busy" @click="reset()"><UiIcon name="new" /></AButton>
         <AButton type="text" aria-label="收起对话" title="收起对话" @click="open = false"><UiIcon name="collapse" /></AButton>
       </div>
     </header>
-    <div ref="log" class="as-body" role="log" aria-live="polite">
+    <div ref="log" class="as-body" role="log" aria-live="polite" @scroll.passive="onLogScroll">
       <div v-if="!turns.length" class="as-welcome">
-        <div class="as-emblem" aria-hidden="true">探</div>
-        <h2>你好，想从哪里开始？</h2><p>聊聊你的学习目标，一起找到合适的课程。</p>
-        <div v-if="pageTitle" class="as-context">正在了解：{{ pageTitle }}</div>
+        <h2>说说你想学什么</h2>
+        <p v-if="pageTitle" class="as-context">正在了解：{{ pageTitle }}</p>
+        <p>告诉我你的方向和基础，我帮你找合适的课程。</p>
         <div class="as-prompts">
-          <AButton type="text" v-for="(prompt, index) in prompts" :key="prompt" @click="ask(prompt)">
-            <span class="as-prompt-icon" aria-hidden="true">{{ ['✧', '⌘', '☏'][index % 3] }}</span><span>{{ prompt }}</span><span class="as-prompt-arrow" aria-hidden="true">↗</span>
-          </AButton>
+          <AButton type="text" v-for="prompt in prompts" :key="prompt" @click="ask(prompt)">{{ prompt }}</AButton>
         </div>
       </div>
       <template v-for="(turn, index) in turns" :key="index">
         <div class="as-user">{{ turn.question }}</div>
-        <div v-if="turn.thinking" class="as-agent is-thinking" aria-busy="true">正在理解问题并查询课程资料…</div>
-        <div v-if="turn.answer" class="as-agent answer-markdown" v-html="format.markdown(turn.answer)"></div>
+        <div v-if="turn.thinking || turn.answer" class="as-reply">
+          <div v-if="turn.thinking" class="as-agent is-thinking" aria-busy="true"><span class="as-dots" aria-hidden="true"><span></span><span></span><span></span></span>正在理解问题并查询课程资料…</div>
+          <div v-if="turn.answer" class="as-agent answer-markdown" v-html="format.markdown(turn.answer)"></div>
+          <div v-if="turn.answer && !turn.thinking" class="as-answer-tools"><button type="button" class="as-copy" @click="copyAnswer(index)">{{ copiedIndex === index ? '已复制' : '复制' }}</button></div>
+        </div>
         <template v-if="turn.result">
-          <div v-for="item in (turn.result.related_courses || []).slice(0, 3)" :key="item.id" class="as-card">
-            <img v-if="httpsUrl(item.cover_url)" :src="httpsUrl(item.cover_url)" alt="" loading="lazy">
-            <strong>{{ item.title }}</strong><p v-if="item.description">{{ item.description }}</p><p v-if="item.reason">推荐理由：{{ item.reason }}</p>
-            <a v-if="courseUrl(item)" :href="courseUrl(item)" target="_blank" rel="noopener noreferrer">查看官网课程详情</a>
-            <AButton v-if="item.purchase_url" class="as-primary" @click="purchase(item, turn)">去官网购买页</AButton>
+          <div v-if="(turn.result.related_courses || []).length" class="as-courses">
+            <div v-for="item in (turn.result.related_courses || []).slice(0, 3)" :key="item.id" class="as-card as-course">
+              <img v-if="httpsUrl(item.cover_url)" class="as-cover" :src="httpsUrl(item.cover_url)" alt="" loading="lazy">
+              <span v-else class="as-cover as-cover-fallback" aria-hidden="true">{{ (item.title || '课').slice(0, 1) }}</span>
+              <div class="as-course-copy">
+                <strong>{{ item.title }}</strong>
+                <p v-if="item.description" class="as-course-desc">{{ item.description }}</p>
+                <p v-if="item.reason" class="as-course-reason">推荐理由：{{ item.reason }}</p>
+              </div>
+              <div v-if="courseUrl(item) || item.purchase_url" class="as-course-actions">
+                <a v-if="courseUrl(item)" :href="courseUrl(item)" target="_blank" rel="noopener noreferrer">查看课程详情</a>
+                <AButton v-if="item.purchase_url" type="primary" class="as-primary" @click="purchase(item, turn)">去官网购买页</AButton>
+              </div>
+            </div>
           </div>
-          <div v-if="showOwner(turn)" class="as-card">
+          <div v-if="showOwner(turn)" class="as-card as-advisor">
             <strong>{{ turn.result.owner.configured ? (turn.result.owner.name || '课程顾问') : '暂未找到可用的课程顾问' }}</strong>
             <template v-if="ownerContact(turn)">
-              <img v-if="imageUrl(ownerContact(turn)) && !turn.qrFailed" :src="ownerContact(turn)" alt="课程顾问二维码" @error="turn.qrFailed = true">
+              <template v-if="imageUrl(ownerContact(turn)) && !turn.qrFailed">
+                <img class="as-qr" :src="ownerContact(turn)" alt="课程顾问二维码" @error="turn.qrFailed = true">
+                <p class="as-qr-note">扫码添加课程顾问</p>
+              </template>
               <a v-else-if="!turn.qrFailed" :href="ownerContact(turn)" target="_blank" rel="noopener noreferrer">打开课程顾问联系方式</a>
               <a v-else-if="httpsUrl(config.fallback_contact)" :href="httpsUrl(config.fallback_contact)" target="_blank" rel="noopener noreferrer">二维码不可用，查看备用联系方式</a>
               <p v-else>联系方式暂不可用，请稍后重试。</p>
@@ -302,21 +340,30 @@ async function purchase(item, turn) {
           </div>
           <details v-if="turn.result.sources?.length || evidence(turn).length" class="as-evidence">
             <summary>查看回答依据</summary>
-            <div v-for="(source, sourceIndex) in turn.result.sources || []" :key="sourceIndex" class="as-source">{{ source.title || '课程资料' }}{{ source.snippet ? ' · ' + source.snippet : '' }}</div>
-            <div v-for="label in evidence(turn)" :key="label" class="as-source">{{ label }}</div>
+            <div class="as-sources">
+              <div v-for="(source, sourceIndex) in turn.result.sources || []" :key="sourceIndex" class="as-source">{{ source.title || '课程资料' }}{{ source.snippet ? ' · ' + source.snippet : '' }}</div>
+              <div v-for="label in evidence(turn)" :key="label" class="as-source">{{ label }}</div>
+            </div>
           </details>
         </template>
         <p v-if="turn.actionError" class="as-error">{{ turn.actionError }}</p>
-        <template v-if="turn.error"><div class="as-error" role="alert">{{ turn.error }}</div><AButton :disabled="busy" @click="ask(turn.question, turn)">重试本次提问</AButton></template>
+        <div v-if="turn.error" class="as-failure"><div class="as-error" role="alert">{{ turn.error }}</div><AButton class="as-retry" :disabled="busy" @click="ask(turn.question, turn)">重试本次提问</AButton></div>
       </template>
     </div>
     <div class="as-input">
+      <button v-show="awayFromLatest" type="button" class="as-jump" aria-label="回到最新" @click="scrollAnswer"><UiIcon name="collapse" /></button>
       <p v-if="historyError && !historyOpen && editingSession === null" class="as-error" role="alert">{{ historyError }}</p>
       <form class="as-composer" @submit.prevent="ask()">
         <ATextarea ref="input" v-model:value="draft" :disabled="busy" :auto-size="{minRows:2,maxRows:5}" :maxlength="2000" :bordered="false" aria-label="咨询内容" placeholder="问问课程，或说说你想学什么…" @keydown="keydown" />
         <div class="as-composer-footer"><span class="as-key-hint">Enter 发送 · Shift + Enter 换行</span><AButton class="as-send" type="primary" html-type="submit" aria-label="发送消息" title="发送消息" :disabled="busy || !draft.trim()"><UiIcon name="send" /></AButton></div>
       </form>
-      <p class="as-disclaimer">咨询会保存必要记录，并发送必要上下文至模型服务商。请勿输入身份证、支付密码或内部资料。内容由 AI 辅助生成，重要信息请与课程顾问确认。</p>
+      <div class="as-disclaimer">
+        <span>内容由 AI 辅助生成，重要信息请与课程顾问确认。</span>
+        <APopover :open="privacyOpen" trigger="click" placement="topRight" :arrow="false" overlay-class-name="as-privacy-popover" :get-popup-container="getPopupContainer" @open-change="value => privacyOpen = value">
+          <AButton type="text" class="as-privacy">隐私说明</AButton>
+          <template #content><p class="as-privacy-copy">咨询会保存必要记录，并发送必要上下文至模型服务商。请勿输入身份证、支付密码或内部资料。内容由 AI 辅助生成，重要信息请与课程顾问确认。</p></template>
+        </APopover>
+      </div>
     </div>
   </section>
   <AModal :open="editingSession !== null" title="重命名对话" :get-container="getPopupContainer" :z-index="2147483020" :width="340" :ok-button-props="{disabled:!renameValid}" ok-text="保存" cancel-text="取消" @ok="renameSession" @cancel="editingSession = null" destroy-on-close>
