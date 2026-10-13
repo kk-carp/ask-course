@@ -234,7 +234,7 @@ def test_reviewed_data_refuses_destructive_migration_rollback(store):
     publish(candidate())
     with engine.begin() as connection:
         config.attributes["connection"] = connection
-        with pytest.raises(RuntimeError, match="Cannot discard"):
+        with pytest.raises(RuntimeError, match="禁止降级维度"):
             command.downgrade(config, "0003")
 
 
