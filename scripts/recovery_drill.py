@@ -17,7 +17,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.engine import URL
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend import db
@@ -63,13 +63,31 @@ def fingerprint(engine) -> dict:
         return result
 
 
+def wait_for_postgres(engine, timeout: float = 45) -> None:
+    """Wait on the same host TCP connection used by migrations and backups.
+
+    The image's initialization server accepts Unix socket connections before
+    its final server listens on TCP, so container-local pg_isready is too early.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            with engine.connect() as connection:
+                connection.execute(text("SELECT 1"))
+            return
+        except OperationalError:
+            if time.monotonic() >= deadline:
+                raise RuntimeError("Temporary PostgreSQL readiness timed out") from None
+            time.sleep(.5)
+
+
 def run_drill(output: Path) -> dict:
     started = time.monotonic()
     owner = uuid4().hex
     container = None
     engines = []
     report = {"scope": "isolated_synthetic_database_and_files", "production_tested": False,
-              "image_rollback_tested": False, "checks": {}}
+              "image_rollback_tested": False, "checks": {}, "step": "container_start"}
     try:
         container = docker("run", "-d", "--label", f"agent.recovery-drill={owner}",
                            "-e", f"POSTGRES_PASSWORD={secrets.token_hex(20)}", "-e", "POSTGRES_DB=agent_drill",
@@ -77,23 +95,19 @@ def run_drill(output: Path) -> dict:
         details = json.loads(docker("inspect", container))[0]
         password = next(value.split("=", 1)[1] for value in details["Config"]["Env"] if value.startswith("POSTGRES_PASSWORD="))
         port = int(details["NetworkSettings"]["Ports"]["5432/tcp"][0]["HostPort"])
-        deadline = time.monotonic() + 45
-        while True:
-            result = subprocess.run(["docker", "exec", container, "pg_isready", "-U", "postgres", "-d", "agent_drill"], capture_output=True, timeout=5, check=False)
-            if result.returncode == 0:
-                break
-            if time.monotonic() >= deadline:
-                raise RuntimeError("Temporary PostgreSQL readiness timed out")
-            time.sleep(.5)
         url = URL.create("postgresql+psycopg", username="postgres", password=password,
                          host="127.0.0.1", port=port, database="agent_drill")
-        source = create_engine(url)
+        source = create_engine(url, connect_args={"connect_timeout": 2})
         engines.append(source)
+        report["step"] = "postgres_readiness"
+        wait_for_postgres(source)
+        report["step"] = "schema_upgrade"
         config = Config(str(ROOT / "alembic.ini"))
         with source.begin() as connection:
             config.attributes["connection"] = connection
             command.upgrade(config, "head")
         with tempfile.TemporaryDirectory(prefix="agent-recovery-") as temporary:
+            report["step"] = "seed_synthetic_data"
             work = Path(temporary)
             original = work / "release-data"
             original.mkdir()
@@ -114,6 +128,7 @@ def run_drill(output: Path) -> dict:
                 session.add(PilotControl(id=1, percent=5))
                 session.commit()
             original_engine, original_factory = db.engine, db.SessionLocal
+            report["step"] = "emergency_stop"
             db.engine, db.SessionLocal = source, sessionmaker(source)
             try:
                 stop_pilot()
@@ -123,6 +138,7 @@ def run_drill(output: Path) -> dict:
                 verify(pilot_percent(session) == 0)
                 verify(not eligible("43", "synthetic-visitor", session))
             report["checks"]["emergency_stop"] = True
+            report["step"] = "backup_and_restore"
             before = fingerprint(source)
             docker("exec", container, "pg_dump", "-U", "postgres", "-d", "agent_drill", "-Fc", "-f", "/tmp/drill.dump")
             docker("cp", f"{container}:/tmp/drill.dump", str(work / "drill.dump"))
@@ -137,6 +153,7 @@ def run_drill(output: Path) -> dict:
             docker("exec", container, "pg_restore", "-U", "postgres", "-d", "agent_drill_restore", "--exit-on-error", "/tmp/restore.dump")
             restored = create_engine(url.set(database="agent_drill_restore"))
             engines.append(restored)
+            report["step"] = "verify_restored_data"
             verify(fingerprint(restored) == before)
             report["checks"]["all_tables_rows_and_content_match"] = True
             with Session(restored) as session:
@@ -145,6 +162,7 @@ def run_drill(output: Path) -> dict:
                 verify(session.get(Conversation, "drill-conversation").messages[0].content == "Synthetic consultation")
                 verify(session.scalar(select(DocumentReview.action)) == "publish")
             report["checks"]["restored_records_and_stop_state"] = True
+            report["step"] = "rollback_guard"
             with restored.begin() as connection:
                 config.attributes["connection"] = connection
                 try:
@@ -156,10 +174,15 @@ def run_drill(output: Path) -> dict:
                     raise AssertionError("Unsafe downgrade was accepted")
             verify(fingerprint(restored) == before)
             report["checks"]["unsafe_schema_rollback_refused_without_data_loss"] = True
+        report["step"] = "completed"
         report["passed"] = True
     except Exception as exc:
         report["passed"] = False
         report["failure_type"] = type(exc).__name__
+        # Never print exception text: driver and Docker errors can contain secrets.
+        print(json.dumps({"recovery_drill_failure": {
+            "step": report["step"], "type": report["failure_type"],
+        }}), file=sys.stderr)
         raise
     finally:
         for engine in engines:

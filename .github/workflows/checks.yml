@@ -45,3 +45,11 @@ jobs:
       - run: pip install -r requirements-ci.txt
       - run: python -m pytest -q tests/integration
       - run: python scripts/recovery_drill.py
+      - name: Preserve recovery drill report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-drill-report
+          path: data/operations/recovery-drill.json
+          if-no-files-found: ignore
+          retention-days: 7
