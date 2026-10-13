@@ -150,7 +150,7 @@ def run_drill(output: Path) -> dict:
                 try:
                     command.downgrade(config, "0003")
                 except RuntimeError as exc:
-                    if "Cannot discard" not in str(exc):
+                    if not any(marker in str(exc) for marker in ("Cannot discard", "禁止降级维度")):
                         raise
                 else:
                     raise AssertionError("Unsafe downgrade was accepted")
